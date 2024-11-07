@@ -2,6 +2,7 @@ from talkingtomachines.management.experiment import AItoAIInterviewExperiment
 
 
 def initialize_experiment(prompt_template_data: dict) -> dict:
+    print(prompt_template_data)
     experiment = None
     # experiment = AItoAIInterviewExperiment(
     #     experiment_id="reducing_political_polarisation_demo_placebo_immigration_pretreatment",

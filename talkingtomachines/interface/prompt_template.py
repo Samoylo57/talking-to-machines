@@ -165,6 +165,34 @@ def generate_regex_for_response_options(response_options: str) -> list:
     return combined_regex
 
 
+def insert_response_options(row: pd.Series) -> str:
+    """Inserts response options into a prompt string if a placeholder is present.
+
+    This function checks if the placeholder "{response_options}" is present in the
+    "prompt" field of the given pandas Series row. If the placeholder is found, it
+    replaces it with a formatted string of response options separated by commas and
+    an "or" before the last option. The response options are expected to be in the
+    "response_options" field of the row, separated by semicolons.
+
+    Args:
+        row (pd.Series): A pandas Series containing at least "prompt" and
+                         "response_options" fields.
+
+    Returns:
+        str: The prompt string with the response options inserted, if the placeholder
+             was present. Otherwise, returns the original prompt string.
+    """
+    if "{response_options}" in row["prompt"]:
+        options = row["response_options"].split(";")
+        return row["prompt"].replace(
+            "{response_options}",
+            f'{", ".join([f"{repr(option)}" for option in options[:-1]])} or {repr(options[-1])}',
+        )
+
+    else:
+        return row["prompt"]
+
+
 def extract_prompts(template_file_path: str, sheet_name: str) -> dict:
     """Extracts prompts from an Excel worksheet and returns them as a dictionary.
 
@@ -192,6 +220,9 @@ def extract_prompts(template_file_path: str, sheet_name: str) -> dict:
     prompts_df["prompt"] = prompts_df["text_adapted"]
     prompts_df["prompt"] = prompts_df["prompt"].fillna(prompts_df["text"])
     prompts_df["prompt"] = prompts_df["prompt"].fillna("")
+
+    # Insert response options into prompts
+    prompts_df["prompt"] = prompts_df.apply(insert_response_options, axis=1)
 
     # Parse response options to regex format
     prompts_df["response_options"] = prompts_df["response_options"].apply(
