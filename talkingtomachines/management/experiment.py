@@ -17,7 +17,15 @@ from talkingtomachines.generative.prompt import (
 )
 from talkingtomachines.storage.experiment import save_experiment
 
-SUPPORTED_MODELS = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo"]
+SUPPORTED_MODELS = [
+    "gpt-4o",
+    "gpt-4o-mini",
+    "gpt-4-turbo",
+    "gpt-4",
+    "gpt-3.5-turbo",
+    "hf-serverless-inference",
+    "hf-dedicated-inference",
+]
 SUPPORTED_TREATMENT_ASSIGNMENT_STRATEGIES = [
     "simple_random",
     "complete_random",
