@@ -1,6 +1,7 @@
 from typing import Any, List
 import pandas as pd
 import datetime
+import re
 from tqdm import tqdm
 from talkingtomachines.generative.synthetic_agent import (
     ConversationalSyntheticAgent,
@@ -23,8 +24,7 @@ SUPPORTED_MODELS = [
     "gpt-4-turbo",
     "gpt-4",
     "gpt-3.5-turbo",
-    "hf-serverless-inference",
-    "hf-dedicated-inference",
+    "hf-inference",
 ]
 SUPPORTED_TREATMENT_ASSIGNMENT_STRATEGIES = [
     "simple_random",
@@ -38,6 +38,7 @@ SUPPORTED_AGENT_ASSIGNMENT_STRATEGIES = [
     "random",
     "manual",
 ]
+NUM_RETRY = 3
 
 
 class Experiment:
@@ -85,7 +86,7 @@ class AIConversationalExperiment(Experiment):
     Args:
         model_info (str): The information about the AI model used in the experiment.
         experiment_context (str): The context or purpose of the experiment.
-        agent_demographics (pd.DataFrame): The demographic information of the agents participating in the experiment.
+        agent_profiles (pd.DataFrame): The demographic information of the agents participating in the experiment.
         experiment_id (str, optional): The unique ID of the experiment. Defaults to an empty string.
         max_conversation_length (int, optional): The maximum length of a conversation. Defaults to 10.
         treatments (dict[str, Any], optional): The treatments for the experiment. Defaults to an empty dictionary.
@@ -118,8 +119,9 @@ class AIConversationalExperiment(Experiment):
         self,
         model_info: str,
         experiment_context: str,
-        agent_demographics: pd.DataFrame,
+        agent_profiles: pd.DataFrame,
         experiment_id: str = "",
+        api_endpoint: str = "",
         max_conversation_length: int = 10,
         treatments: dict[str, Any] = {},
         treatment_assignment_strategy: str = "simple_random",
@@ -132,6 +134,7 @@ class AIConversationalExperiment(Experiment):
         )
 
         self.model_info = self.check_model_info(model_info)
+        self.api_endpoint = api_endpoint
         self.agent_demographics = self.check_agent_demographics(agent_demographics)
         self.treatment_assignment_strategy = self.check_treatment_assignment_strategy(
             treatment_assignment_strategy, treatment_column, session_column
@@ -369,7 +372,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
     Args:
         model_info (str): The information about the AI model used in the experiment.
         experiment_context (str): The context or purpose of the experiment.
-        agent_demographics (pd.DataFrame): The demographic information of the agents participating in the experiment.
+        agent_profiles (pd.DataFrame): The demographic information of the agents participating in the experiment.
         agent_roles (dict[str, str]): Dictionary mapping agent roles to their descriptions.
         experiment_id (str, optional): The unique ID of the experiment. Defaults to an empty string.
         num_agents_per_session (int, optional): Number of agents per session. Defaults to 2.
@@ -410,9 +413,10 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
         self,
         model_info: str,
         experiment_context: str,
-        agent_demographics: pd.DataFrame,
+        agent_profiles: pd.DataFrame,
         agent_roles: dict[str, str],
         experiment_id: str = "",
+        api_endpoint: str = "",
         num_agents_per_session: int = 2,
         num_sessions: int = 10,
         max_conversation_length: int = 10,
@@ -425,8 +429,9 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
         super().__init__(
             model_info,
             experiment_context,
-            agent_demographics,
+            agent_profiles,
             experiment_id,
+            api_endpoint,
             max_conversation_length,
             treatments,
             treatment_assignment_strategy,
@@ -713,7 +718,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
                     treatment=session_info["treatment"],
                 )
             )
-            session_info["agents_demographic"] = self.agent_assignment[session_id]
+            session_info["agents_"] = self.agent_assignment[session_id]
             session_info["agents"] = self.initialize_agents(session_info)
             session_info = self.run_session(session_info, test_mode=test_mode)
             session_info["agents"] = [
@@ -824,9 +829,9 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
 
     Args:
         model_info (str): The information about the AI model used in the experiment.
-        experiment_context (str): The context or purpose of the experiment.
-        agent_demographics (pd.DataFrame): The demographic information of the agents participating in the experiment.
+        agent_profiles (pd.DataFrame): The demographic information of the agents participating in the experiment.
         agent_roles (dict[str, str]): Dictionary mapping agent roles to their descriptions.
+        experiment_context (str, optional): The context or purpose of the experiment. Defaults to "This is an experiment involving AI agents."
         experiment_id (str, optional): The unique ID of the experiment. Defaults to an empty string.
         num_agents_per_session (int, optional): Number of agents per session. Defaults to 2.
         num_sessions (int, optional): Number of sessions. Defaults to 10.
@@ -834,9 +839,9 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
         treatments (dict[str, Any], optional): The treatments for the experiment. Defaults to an empty dictionary.
         treatment_assignment_strategy (str, optional): The strategy used for assigning treatments to agents. Defaults to "simple_random".
         agent_assignment_strategy (str, optional): The strategy used for assigning agents to sessions. Defaults to "random".
-        treatment_column (str, optional): The column in agent_demographics that contains the manually assigned treatments. Defaults to an empty string.
-        session_column (str, optional): The column in agent_demographics that contains the manually assigned sessions. Defaults to an empty string.
-        interview_script (dict[int, Any], optional): An optional dictionary containing the interview script that the interviewer agent has to follow. Defaults to an empty dictionary.
+        treatment_column (str, optional): The column in agent_profiles that contains the manually assigned treatments. Defaults to an empty string.
+        session_column (str, optional): The column in agent_profiles that contains the manually assigned sessions. Defaults to an empty string.
+        experiment_prompts (List[dict[str, str]], optional): An optional dictionary containing the interview script that the interviewer agent has to follow.
 
     Raises:
         ValueError: If the provided num_sessions is not valid.
@@ -848,7 +853,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
     Attributes:
         model_info (str): The information about the AI model used in the experiment.
         experiment_context (str): The context or purpose of the experiment.
-        agent_demographics (pd.DataFrame): The demographic information of the agents participating in the experiment.
+        agent_profiles (pd.DataFrame): The demographic information of the agents participating in the experiment.
         agent_roles (dict[str, str]): Dictionary mapping agent roles to their descriptions.
         experiment_id (str): The unique ID of the experiment.
         num_agents_per_session (int, optional): Number of agents per session.
@@ -857,8 +862,8 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
         treatments (dict[str, Any], optional): The treatments for the experiment.
         treatment_assignment_strategy (str, optional): The strategy used for assigning treatments to agents.
         agent_assignment_strategy (str, optional): The strategy used for assigning agents to sessions.
-        treatment_column (str, optional): The column in agent_demographics that contains the manually assigned treatments.
-        session_column (str, optional): The column in agent_demographics that contains the manually assigned sessions.
+        treatment_column (str, optional): The column in agent_profiles that contains the manually assigned treatments.
+        session_column (str, optional): The column in agent_profiles that contains the manually assigned sessions.
         interview_script (dict[int, Any], optional): A dictionary containing the interview script that the interviewer agent has to follow.
         treatment_assignment (dict[int, str]): The assignment of treatments to agents.
         session_id_list (List[Any]): List of session IDs.
@@ -868,10 +873,11 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
     def __init__(
         self,
         model_info: str,
-        experiment_context: str,
-        agent_demographics: pd.DataFrame,
+        agent_profiles: pd.DataFrame,
         agent_roles: dict[str, str],
+        experiment_context: str = "This is an experiment involving AI agents.",
         experiment_id: str = "",
+        api_endpoint: str = "",
         num_agents_per_session: int = 2,
         num_sessions: int = 10,
         max_conversation_length: int = 10,
@@ -880,14 +886,20 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
         agent_assignment_strategy: str = "random",
         treatment_column: str = "",
         session_column: str = "",
-        interview_script: dict[int, Any] = {},
+        experiment_prompts: list[dict[str, str]] = [
+            {
+                "type": "context",
+                "experiment_prompt": "This is an experiment involving AI agents.",
+            }
+        ],
     ):
         super().__init__(
             model_info,
             experiment_context,
-            agent_demographics,
+            agent_profiles,
             agent_roles,
             experiment_id,
+            api_endpoint,
             num_agents_per_session,
             num_sessions,
             max_conversation_length,
@@ -903,72 +915,42 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
         )
         self.agent_roles = self.check_agent_roles(agent_roles)
         self.agent_assignment = self.assign_agents_to_session()
-        self.interview_script = self.check_interview_script(interview_script)
+        self.experiment_prompts = self.check_prompts(experiment_prompts)
 
-    def check_interview_script(
-        self, interview_script: dict[int, Any]
-    ) -> dict[int, Any]:
-        """If the interview script is provided, checks if 1) each dictionary key is an integer and starts with 0, 1) the value is either a string or list of strings, and 3) the maxmimum length of the conversation is equal to self.max_conversation_length.
+    def check_prompts(self, experiment_prompts: List[dict[str, str]]) -> dict[int, Any]:
+        """If the prompts are provided, checks if the maxmimum length of the conversation is greater self.max_conversation_length. If true, raise an error.
 
         Args:
-            interview_script (dict[int, Any]): A list containing the interview script that the interviewer agent has to follow.
+            experiment_prompts (List[dict[str, str]]): A list containing the interview script that the interviewer agent has to follow.
 
         Raises:
-            ValueError: If the length of the interview script multiplied by the number of agents is not equal to the defined maximum conversation length.
+            ValueError: If the length of the interview script multiplied by the number of agents is greater than the defined maximum conversation length.
 
         Returns:
             List[str]: A list containing the interview script that the interviewer agent has to follow.
         """
+        # Check if experiment_prompts is not an empty list
+        if not experiment_prompts:
+            raise ValueError("The experiment_prompts list should not be an empty list.")
 
+        # Check if the first item in experiment_prompts contains "type": "context"
         if (
-            interview_script
-            and len(interview_script) * self.num_agents_per_session
-            != self.max_conversation_length
+            "type" not in experiment_prompts[0]
+            or experiment_prompts[0]["type"] != "context"
         ):
             raise ValueError(
-                f"Based on the length of the interview script ({len(interview_script)}) and number of agents ({self.num_agents_per_session}), the maximum length of the conversation should be {len(interview_script) * self.num_agents_per_session} and not {self.max_conversation_length}."
+                'The first item in experiment_prompts must contain "type": "context".'
             )
 
-        return interview_script
+        if (
+            len(experiment_prompts) * self.num_agents_per_session
+            > self.max_conversation_length
+        ):
+            raise ValueError(
+                f"Based on the length of the interview script ({len(experiment_prompts)}) and number of agents ({self.num_agents_per_session}), the maximum length of the conversation should be larger or equal to {len(experiment_prompts) * self.num_agents_per_session} and not {self.max_conversation_length}."
+            )
 
-    def check_interview_script(
-        self, interview_script: dict[int, Any]
-    ) -> dict[int, Any]:
-        """Checks the interview script.
-
-        Checks if the values are either a string or a list of strings.
-
-        Args:
-            interview_script (dict[int, Any]): A dictionary containing the interview script that the interviewer agent has to follow.
-
-        Raises:
-            ValueError: If any value is not a string or a list of strings.
-
-        Returns:
-            List[str]: A dictionary containing the interview script that the interviewer agent has to follow.
-        """
-        if interview_script:
-            # Check if values are either a string or a list of strings
-            for key, value in interview_script.items():
-                if not isinstance(value, (str, list)):
-                    raise ValueError(
-                        f"Value in interview_script {key} must be a string or a list of strings. Found: {type(value).__name__}"
-                    )
-                if isinstance(value, list) and not all(
-                    isinstance(item, str) for item in value
-                ):
-                    raise ValueError(
-                        f"All items in the list in interview_script {key} must be strings."
-                    )
-                if (
-                    isinstance(value, list)
-                    and len(value) != self.num_agents_per_session - 1
-                ):
-                    raise ValueError(
-                        f"The number of items in the list in interview_script {key} must be equal to the number of interview subjects ({self.num_agents_per_session - 1})"
-                    )
-
-        return interview_script
+        return experiment_prompts
 
     def check_num_agents_per_session(self, num_agents_per_session: int) -> int:
         """Checks if the provided num_agents_per_session is valid.
@@ -987,11 +969,9 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                 f"Unsupported num_agents_per_session: {num_agents_per_session}. For AI-AI conversation-based experiments, num_agents_per_session should be an integer that is equal to or greater than 2."
             )
 
-        if self.num_sessions * (num_agents_per_session - 1) > len(
-            self.agent_demographics
-        ):
+        if self.num_sessions * (num_agents_per_session - 1) > len(self.agent_profiles):
             raise ValueError(
-                f"Total number of agents required for experiment ({self.num_sessions * (num_agents_per_session-1)}) exceed the number of profiles provided in agent_demographics ({len(self.agent_demographics)})."
+                f"Total number of agents required for experiment ({self.num_sessions * (num_agents_per_session-1)}) exceed the number of profiles provided in agent_profiles ({len(self.agent_profiles)})."
             )
 
         return num_agents_per_session
@@ -1019,9 +999,9 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
         return agent_roles
 
     def assign_agents_to_session(self) -> dict[int, List[DemographicInfo]]:
-        """Assigns agents' demographics to each session based on the given number of agents per session (minus the Interviewer agent) and agent assignment strategy.
+        """Assigns agent profiles to each session based on the given number of agents per session (minus the Interviewer agent) and agent assignment strategy.
         However, if the agent_assignment_strategy is 'manual', then assign the agents to their respective sessions based on the
-        assignment defined in agent_demographics.
+        assignment defined in agent_profiles.
 
         Returns:
             dict[int, List[DemographicInfo]]: A dictionary mapping session IDs to a list of agent demographic information.
@@ -1029,8 +1009,8 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
         if self.agent_assignment_strategy == "manual":
             agent_to_session_assignment = {}
             for i, session_id in enumerate(self.session_id_list):
-                session_participants = self.agent_demographics[
-                    self.agent_demographics[self.session_column] == session_id
+                session_participants = self.agent_profiles[
+                    self.agent_profiles[self.session_column] == session_id
                 ]
 
                 if self.treatment_assignment_strategy == "manual":
@@ -1053,15 +1033,15 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                 )
 
         else:
-            randomised_agent_demographics = self.agent_demographics.sample(
-                frac=1
-            ).reset_index(drop=True)
+            randomised_agent_profiles = self.agent_profiles.sample(frac=1).reset_index(
+                drop=True
+            )
 
             num_interview_subjects_per_session = self.num_agents_per_session - 1
             agent_to_session_assignment = {}
             for i, session_id in enumerate(self.session_id_list):
                 agent_to_session_assignment[session_id] = (
-                    randomised_agent_demographics.iloc[
+                    randomised_agent_profiles.iloc[
                         i
                         * num_interview_subjects_per_session : (i + 1)
                         * num_interview_subjects_per_session
@@ -1070,12 +1050,16 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
 
         return agent_to_session_assignment
 
-    def run_experiment(self, test_mode: bool = True) -> dict[str, Any]:
+    def run_experiment(
+        self, test_mode: bool = True, version: int = 1
+    ) -> dict[str, Any]:
         """Runs an experiment based on the experimental settings defined during class initialisation. If test_mode is set to True, the first session will be selected and run.
 
         Args:
             test_mode (bool, optional): Indicates whether the experiment is in test mode or not.
                 Defaults to True.
+            version (int, optional): Indicates the version of the experiment.
+                Defaults to 1.
 
         Returns:
             dict[str, Any]: A dictionary containing the experiment ID and session information.
@@ -1086,7 +1070,10 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
         else:
             session_id_list = self.session_id_list
 
+        self.experiment_id = f"{self.experiment_id}_v{version}"
         experiment = {"experiment_id": self.experiment_id, "sessions": {}}
+
+        experiment_context = self.experiment_prompts.pop(0)["experiment_prompt"]
         for session_id in tqdm(session_id_list):
             session_info = {}
             session_info["session_id"] = session_id
@@ -1094,14 +1081,15 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
             session_info["treatment"] = self.treatments[treatment_label]
             session_info["session_system_message"] = (
                 generate_conversational_session_system_message(
-                    experiment_context=self.experiment_context,
+                    experiment_context=experiment_context,
                     treatment=session_info["treatment"],
                 )
             )
-            session_info["agents_demographic"] = self.agent_assignment[session_id]
+            session_info["experiment_context"] = experiment_context
+            session_info["agent_profiles"] = self.agent_assignment[session_id]
             session_info["agents"] = self.initialize_agents(session_info)
             session_info = self.run_session(
-                session_info, self.interview_script, test_mode=test_mode
+                session_info, self.experiment_prompts, test_mode=test_mode
             )
             session_info["agents"] = [
                 agent.to_dict() for agent in session_info["agents"]
@@ -1118,51 +1106,72 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
         """Initializes and returns a list of ConversationalSyntheticAgent objects based on the provided session information.
 
         Args:
-            session_info (dict[str, Any]): A dictionary containing session information, including agents' demographics, session ID, treatment, etc.
+            session_info (dict[str, Any]): A dictionary containing session information, including agent profiles, session ID, treatment, etc.
 
         Returns:
             List[ConversationalSyntheticAgent]: A list of initialized ConversationalSyntheticAgent objects.
 
         Raises:
-            AssertionError: If the number of agents' demographics does not match the number of agent roles (minus Interviewer role) when initializing agents.
+            AssertionError: If the number of agent profiles does not match the number of agent roles (minus Interviewer role) when initializing agents.
         """
         assert (
-            len(session_info["agents_demographic"]) == len(self.agent_roles) - 1
-        ), f"Number of agents' demographics ({len(session_info['agents_demographic'])}) does not match the number of agent roles ({len(self.agent_roles)-1}) when initialising agents. The number of agent demographics should be one less than the number of roles (minus the Interviewer)."
+            len(session_info["agent_profiles"]) == len(self.agent_roles) - 1
+        ), f"Number of agents' profiles ({len(session_info['agent_profiles'])}) does not match the number of agent roles ({len(self.agent_roles)-1}) when initialising agents. The number of agent profiles should be one less than the number of roles (minus the Interviewer)."
 
         agent_list = []
-        for i in range(len(session_info["agents_demographic"]) + 1):
+        for i in range(len(session_info["agent_profiles"]) + 1):
             if i == 0:
-                agent_demographic = {}  # No demographic profile for Interviewer role
+                agent_profile = {}  # No demographic profile for Interviewer role
             else:
-                agent_demographic = session_info["agents_demographic"][i - 1]
+                agent_profile = session_info["agent_profiles"][i - 1]
 
             agent_list.append(
                 ConversationalSyntheticAgent(
                     experiment_id=self.experiment_id,
-                    experiment_context=self.experiment_context,
+                    experiment_context=session_info["experiment_context"],
                     session_id=session_info["session_id"],
-                    demographic_info=agent_demographic,
+                    demographic_info=agent_profile,
                     role=list(self.agent_roles.keys())[i],
                     role_description=list(self.agent_roles.values())[i],
                     model_info=self.model_info,
+                    api_endpoint=self.api_endpoint,
                     treatment=session_info["treatment"],
                 )
             )
 
         return agent_list
 
+    def validate_response(self, agent, question, regex_pattern):
+        """
+        Validates the agent's response against the given regex pattern.
+
+        Args:
+            agent (ConversationalSyntheticAgent): The agent object that provides responses.
+            question (str): The question for the agent to respond to.
+            regex_pattern (str): The compiled regex pattern to validate against.
+
+        Returns:
+            str: The validated response or the last response after 3 attempts.
+        """
+        regex_pattern = re.compile(regex_pattern)
+        for _ in range(NUM_RETRY):
+            response = agent.respond(question=question)
+            match = regex_pattern.search(response)
+            if match:
+                return match.group(0)
+        return response
+
     def run_session(
         self,
         session_info: dict[str, Any],
-        interview_script: List[str],
+        experiment_prompts: List[dict[str, str]],
         test_mode: bool = False,
     ) -> dict[str, Any]:
         """Runs a session involving a conversation between multiple AI agents.
 
         Args:
             session_info (dict[str, Any]): A dictionary containing session information.
-            interview_script (List[str]): An list containing the interview script that the interviewer agent has to follow.
+            experiment_prompts (List[dict[str, str]]): An list containing the interview script that the interviewer agent has to follow.
             test_mode (bool, optional): A boolean indicating if the session is executed under test mode. In test mode, only the first session is executed and all responses are printed out for easy reference.
 
         Returns:
@@ -1177,22 +1186,33 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
         if test_mode:
             print({agent_role: response})
 
-        if interview_script:
-            for _, script in interview_script.items():
-                if (
-                    script == ""
-                ):  # Interviewer is keeping silent to facilitate discussion among subjects
+        if experiment_prompts:
+            for round in experiment_prompts:
+                interview_question = round.get("experiment_prompt", "")
+
+                if interview_question == "":
+                    # Interviewer is keeping silent to facilitate discussion among subjects
                     for agent in session_info["agents"][1:]:
-                        response = agent.respond(question=response)
+                        if (
+                            "response_options" in round
+                            and "response_validation" in round
+                            and round["response_validation"] == 1
+                        ):
+                            # Handle response options and validation
+                            response = self.validate_response(
+                                agent, response, round["response_options"]
+                            )
+                        else:
+                            response = agent.respond(question=response)
+
                         agent_role = agent.get_role()
                         message_history.append({agent_role: response})
                         if test_mode:
                             print({agent_role: response})
 
-                elif isinstance(
-                    script, str
-                ):  # Interviewer is providing instructions for all subjects and allowing the subjects to continue the conversation
-                    response = script
+                elif round["type"] == "context":
+                    # Interviewer is providing instructions for all subjects and allowing the subjects to continue the conversation
+                    response = interview_question
                     message_history.append({"Interviewer": response})
                     if test_mode:
                         print({"Interviewer": response})
@@ -1201,22 +1221,42 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                         break
 
                     for agent in session_info["agents"][1:]:
-                        response = agent.respond(question=response)
+                        if (
+                            "response_options" in round
+                            and "response_validation" in round
+                            and round["response_validation"] == 1
+                        ):
+                            # Handle response options and validation
+                            response = self.validate_response(
+                                agent, response, round["response_options"]
+                            )
+                        else:
+                            response = agent.respond(question=response)
+
                         agent_role = agent.get_role()
                         message_history.append({agent_role: response})
                         if test_mode:
                             print({agent_role: response})
 
-                elif isinstance(
-                    script, list
-                ):  # Interview is providing specific instructions to each subject
-                    for i, subject_script in enumerate(script):
-                        message_history.append({"Interviewer": subject_script})
+                elif round["type"] == "question":
+                    # Interviewer is posing the same question to each subject
+                    for agent in session_info["agents"][1:]:
+                        message_history.append({"Interviewer": interview_question})
                         if test_mode:
-                            print({"Interviewer": subject_script})
+                            print({"Interviewer": interview_question})
 
-                        agent = session_info["agents"][i + 1]
-                        response = agent.respond(question=subject_script)
+                        if (
+                            "response_options" in round
+                            and "response_validation" in round
+                            and round["response_validation"] == 1
+                        ):
+                            # Handle response options and validation
+                            response = self.validate_response(
+                                agent, interview_question, round["response_options"]
+                            )
+                        else:
+                            response = agent.respond(question=interview_question)
+
                         agent_role = agent.get_role()
                         message_history.append({agent_role: response})
                         if test_mode:
@@ -1224,12 +1264,8 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
 
                 else:
                     raise ValueError(
-                        f"The script ({script}) for each interview round should either be a string or list of strings that is equal to the number of interview subjects ({self.num_agents_per_session-1})."
+                        f"The type of prompt ({round["type"]}) for each interview round should either be 'context' or 'question'."
                     )
-
-            message_history.append({"system": "End"})
-            if test_mode:
-                print({"system": "End"})
 
         else:
             while (
@@ -1249,11 +1285,13 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                 agent_role = agent.get_role()
                 conversation_length += 1
 
-        message_history.append({agent_role: response})
+            message_history.append({agent_role: response})
+            if test_mode:
+                print({agent_role: response})
+                print()
+
         message_history.append({"system": "End"})
         if test_mode:
-            print({agent_role: response})
-            print()
             print({"system": "End"})
 
         session_info["message_history"] = message_history

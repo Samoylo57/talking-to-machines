@@ -3,6 +3,7 @@ import argparse
 import warnings
 import ast
 import re
+from tqdm import tqdm
 from talkingtomachines.interface.validate_template import *
 from talkingtomachines.interface.initialize_experiment import initialize_experiment
 
@@ -182,15 +183,15 @@ def insert_response_options(row: pd.Series) -> str:
         str: The prompt string with the response options inserted, if the placeholder
              was present. Otherwise, returns the original prompt string.
     """
-    if "{response_options}" in row["prompt"]:
+    if "{response_options}" in row["experiment_prompt"]:
         options = row["response_options"].split(";")
-        return row["prompt"].replace(
+        return row["experiment_prompt"].replace(
             "{response_options}",
             f'{", ".join([f"{repr(option)}" for option in options[:-1]])} or {repr(options[-1])}',
         )
 
     else:
-        return row["prompt"]
+        return row["experiment_prompt"]
 
 
 def extract_prompts(template_file_path: str, sheet_name: str) -> dict:
@@ -217,12 +218,14 @@ def extract_prompts(template_file_path: str, sheet_name: str) -> dict:
     validate_prompts_sheet(prompts_df)
 
     # Extract the final version of the prompts. First take from "text_adapted", if not take from "text", else ""
-    prompts_df["prompt"] = prompts_df["text_adapted"]
-    prompts_df["prompt"] = prompts_df["prompt"].fillna(prompts_df["text"])
-    prompts_df["prompt"] = prompts_df["prompt"].fillna("")
+    prompts_df["experiment_prompt"] = prompts_df["text_adapted"]
+    prompts_df["experiment_prompt"] = prompts_df["experiment_prompt"].fillna(
+        prompts_df["text"]
+    )
+    prompts_df["experiment_prompt"] = prompts_df["experiment_prompt"].fillna("")
 
     # Insert response options into prompts
-    prompts_df["prompt"] = prompts_df.apply(insert_response_options, axis=1)
+    prompts_df["experiment_prompt"] = prompts_df.apply(insert_response_options, axis=1)
 
     # Parse response options to regex format
     prompts_df["response_options"] = prompts_df["response_options"].apply(
@@ -238,7 +241,7 @@ def extract_prompts(template_file_path: str, sheet_name: str) -> dict:
         row_dict = {key: value for key, value in row.items() if not pd.isnull(value)}
         prompt_list.append(row_dict)
 
-    return {"prompts": prompt_list}
+    return {"experiment_prompts": prompt_list}
 
 
 def extract_constants(template_file_path: str, sheet_name: str) -> dict:
@@ -370,7 +373,7 @@ def main():
             )
 
     # Initialize experiment based on prompt template
-    experiment = initialize_experiment(prompt_template_data)
+    experiment_list = initialize_experiment(prompt_template_data)
 
     # Ask for user confirmation to run experiment
     user_input = (
@@ -382,7 +385,8 @@ def main():
     )
     if user_input == "y":
         print("Experiment has started.")
-        experiment.run_experiment(test_mode=args.test_mode)
+        for idx, experiment in tqdm(enumerate(experiment_list)):
+            experiment.run_experiment(test_mode=args.test_mode, version=idx + 1)
         print("Experiment is completed successfully.")
     else:
         print("Experiment is terminated by the user.")

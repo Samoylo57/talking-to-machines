@@ -77,7 +77,26 @@ def initialize_experiment(prompt_template_data: dict) -> list:
         )
 
         # Initialise experiment based on rendered prompt template
-        experiment = AItoAIInterviewExperiment(**rendered_prompt_template)
+        experiment = AItoAIInterviewExperiment(
+            experiment_id=rendered_prompt_template["experiment_id"],
+            model_info=rendered_prompt_template["model_info"],
+            api_endpoint=rendered_prompt_template["api_endpoint"],
+            agent_profiles=rendered_prompt_template["agent_profiles"],
+            agent_roles=rendered_prompt_template["agent_roles"],
+            num_agents_per_session=rendered_prompt_template["num_agents_per_session"],
+            num_sessions=rendered_prompt_template["num_sessions"],
+            max_conversation_length=rendered_prompt_template["max_conversation_length"],
+            treatments=rendered_prompt_template["treatments"],
+            treatment_assignment_strategy=rendered_prompt_template[
+                "treatment_assignment_strategy"
+            ],
+            agent_assignment_strategy=rendered_prompt_template[
+                "agent_assignment_strategy"
+            ],
+            treatment_column=rendered_prompt_template["treatment_column"],
+            session_column=rendered_prompt_template["session_column"],
+            experiment_prompts=rendered_prompt_template["experiment_prompts"],
+        )
 
         experiments.append(experiment)
 
