@@ -242,9 +242,7 @@ class AIConversationalExperiment(Experiment):
 
         return agent_assignment_strategy
 
-    def check_agent_profiles(
-        self, agent_profiles: pd.DataFrame
-    ) -> pd.DataFrame:
+    def check_agent_profiles(self, agent_profiles: pd.DataFrame) -> pd.DataFrame:
         """Checks to ensure that provided agent_profiles is not empty and contains a ID column.
 
         Args:
@@ -260,9 +258,7 @@ class AIConversationalExperiment(Experiment):
             raise ValueError("agent_profiles DataFrame cannot be empty.")
 
         if "ID" not in agent_profiles.columns:
-            raise ValueError(
-                "agent_profiles DataFrame should contain an 'ID' column."
-            )
+            raise ValueError("agent_profiles DataFrame should contain an 'ID' column.")
 
         return agent_profiles
 
