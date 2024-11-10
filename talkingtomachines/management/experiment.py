@@ -78,33 +78,33 @@ class AIConversationalExperiment(Experiment):
     Args:
         model_info (str): The information about the AI model used in the experiment.
         experiment_context (str): The context or purpose of the experiment.
-        agent_profiles (pd.DataFrame): The demographic information of the agents participating in the experiment.
+        agent_profiles (pd.DataFrame): The profile information of the agents participating in the experiment.
         experiment_id (str, optional): The unique ID of the experiment. Defaults to an empty string.
         max_conversation_length (int, optional): The maximum length of a conversation. Defaults to 10.
         treatments (dict[str, Any], optional): The treatments for the experiment. Defaults to an empty dictionary.
         treatment_assignment_strategy (str, optional): The strategy used for assigning treatments to agents. Defaults to "simple_random".
         agent_assignment_strategy (str, optional): The strategy used for assigning agents to sessions. Defaults to "random".
-        treatment_column (str, optional): The column in agent_demographics that contains the manually assigned treatments. Defaults to an empty string.
-        session_column (str, optional): The column in agent_demographics that contains the manually assigned sessions. Defaults to an empty string.
+        treatment_column (str, optional): The column in agent_profiles that contains the manually assigned treatments. Defaults to an empty string.
+        session_column (str, optional): The column in agent_profiles that contains the manually assigned sessions. Defaults to an empty string.
 
     Raises:
         ValueError: If the provided model_info is not supported.
         ValueError: If the provided treatment_assignment_strategy is not supported.
-        ValueError: If the provided agent_demographics is an empty DataFrame or does not contain a 'ID' column.
+        ValueError: If the provided agent_profiles is an empty DataFrame or does not contain a 'ID' column.
         ValueError: If the provided max_conversation_length is lesser than 5.
         ValueError: If the provided treatment is not in the nested dictionary structure when treatment_assignment_strategy is 'full_factorial'.
 
     Attributes:
         model_info (str): The information about the AI model used in the experiment.
         experiment_context (str): The context or purpose of the experiment.
-        agent_demographics (pd.DataFrame): The demographic information of the agents participating in the experiment.
+        agent_profiles (pd.DataFrame): The profile information of the agents participating in the experiment.
         experiment_id (str): The unique ID of the experiment.
         max_conversation_length (int): The maximum length of a conversation.
         treatments (dict[str, Any]): The treatments for the experiment.
         treatment_assignment_strategy (str): The strategy used for assigning treatments to agents.
         agent_assignment_strategy (str, optional): The strategy used for assigning agents to sessions.
-        treatment_column (str, optional): The column in agent_demographics that contains the manually assigned treatments.
-        session_column (str, optional): The column in agent_demographics that contains the manually assigned sessions.
+        treatment_column (str, optional): The column in agent_profiles that contains the manually assigned treatments.
+        session_column (str, optional): The column in agent_profiles that contains the manually assigned sessions.
     """
 
     def __init__(
@@ -127,7 +127,7 @@ class AIConversationalExperiment(Experiment):
 
         self.model_info = self.check_model_info(model_info)
         self.api_endpoint = api_endpoint
-        self.agent_demographics = self.check_agent_demographics(agent_demographics)
+        self.agent_profiles = self.check_agent_profiles(agent_profiles)
         self.treatment_assignment_strategy = self.check_treatment_assignment_strategy(
             treatment_assignment_strategy, treatment_column, session_column
         )
@@ -179,8 +179,8 @@ class AIConversationalExperiment(Experiment):
 
         Raises:
             ValueError: If the provided treatment_assignment_strategy is not supported.
-            ValueError: If treatment_column is an empty string or not one of the columns in agent_demographics when using the manual treatment assignment strategy.
-            ValueError: If session_column is an empty string or not one of the columns in agent_demographics when using the manual treatment assignment strategy.
+            ValueError: If treatment_column is an empty string or not one of the columns in agent_profiles when using the manual treatment assignment strategy.
+            ValueError: If session_column is an empty string or not one of the columns in agent_profiles when using the manual treatment assignment strategy.
         """
         if (
             treatment_assignment_strategy
@@ -190,21 +190,21 @@ class AIConversationalExperiment(Experiment):
                 f"Unsupported treatment_assignment_strategy: {treatment_assignment_strategy}. Supported strategies are: {SUPPORTED_TREATMENT_ASSIGNMENT_STRATEGIES}."
             )
 
-        # Check that treatment_column and session_column can be found in agent_demographics when using manual treatment assignment
+        # Check that treatment_column and session_column can be found in agent_profiles when using manual treatment assignment
         if treatment_assignment_strategy == "manual":
             if (
                 treatment_column == ""
-                or treatment_column not in self.agent_demographics.columns
+                or treatment_column not in self.agent_profiles.columns
             ):
                 raise ValueError(
-                    f"The argument 'treatment_column' cannot be an empty string and must be one of the columns in agent_demographics when performing manual treatment assignment."
+                    f"The argument 'treatment_column' cannot be an empty string and must be one of the columns in agent_profiles when performing manual treatment assignment."
                 )
             if (
                 session_column == ""
-                or session_column not in self.agent_demographics.columns
+                or session_column not in self.agent_profiles.columns
             ):
                 raise ValueError(
-                    f"The argument 'session_column' cannot be an empty string and must be one of the columns in agent_demographics when performing manual treatment assignment."
+                    f"The argument 'session_column' cannot be an empty string and must be one of the columns in agent_profiles when performing manual treatment assignment."
                 )
 
         return treatment_assignment_strategy
@@ -223,51 +223,51 @@ class AIConversationalExperiment(Experiment):
 
         Raises:
             ValueError: If the provided agent_assignment_strategy is not supported.
-            ValueError: If session_column is an empty string or not one of the columns in agent_demographics when using the manual agent assignment strategy.
+            ValueError: If session_column is an empty string or not one of the columns in agent_profiles when using the manual agent assignment strategy.
         """
         if agent_assignment_strategy not in SUPPORTED_AGENT_ASSIGNMENT_STRATEGIES:
             raise ValueError(
                 f"Unsupported agent_assignment_strategy: {agent_assignment_strategy}. Supported strategies are: {SUPPORTED_AGENT_ASSIGNMENT_STRATEGIES}."
             )
 
-        # Check that session_column can be found in agent_demographics when using manual agent assignment
+        # Check that session_column can be found in agent_profiles when using manual agent assignment
         if agent_assignment_strategy == "manual":
             if (
                 session_column == ""
-                or session_column not in self.agent_demographics.columns
+                or session_column not in self.agent_profiles.columns
             ):
                 raise ValueError(
-                    f"The argument 'session_column' cannot be an empty string and must be one of the columns in agent_demographics when performing manual agent assignment."
+                    f"The argument 'session_column' cannot be an empty string and must be one of the columns in agent_profiles when performing manual agent assignment."
                 )
 
         return agent_assignment_strategy
 
-    def check_agent_demographics(
-        self, agent_demographics: pd.DataFrame
+    def check_agent_profiles(
+        self, agent_profiles: pd.DataFrame
     ) -> pd.DataFrame:
-        """Checks to ensure that provided agent_demographics is not empty and contains a ID column.
+        """Checks to ensure that provided agent_profiles is not empty and contains a ID column.
 
         Args:
-            agent_demographics (str): The agent_demographics to be checked.
+            agent_profiles (str): The agent_profiles to be checked.
 
         Returns:
-            str: The validated agent_demographics.
+            str: The validated agent_profiles.
 
         Raises:
-            ValueError: If the provided agent_demographics is an empty dataframe or if it does not contain an ID column.
+            ValueError: If the provided agent_profiles is an empty dataframe or if it does not contain an ID column.
         """
-        if agent_demographics.empty:
-            raise ValueError("agent_demographics DataFrame cannot be empty.")
+        if agent_profiles.empty:
+            raise ValueError("agent_profiles DataFrame cannot be empty.")
 
-        if "ID" not in agent_demographics.columns:
+        if "ID" not in agent_profiles.columns:
             raise ValueError(
-                "agent_demographics DataFrame should contain an 'ID' column."
+                "agent_profiles DataFrame should contain an 'ID' column."
             )
 
-        return agent_demographics
+        return agent_profiles
 
     def check_max_conversation_length(self, max_conversation_length: int) -> int:
-        """Checks if the provided max_conversation is an integer greater than or equal to 5.
+        """Checks if the provided max_conversation is an integer greater than or equal to 1.
 
         Args:
             max_conversation_length (int): The max_conversation_length to be checked.
@@ -276,11 +276,11 @@ class AIConversationalExperiment(Experiment):
             int: The validated max_conversation_length.
 
         Raises:
-            ValueError: If the provided treatments is less than 5.
+            ValueError: If the provided treatments is less than 1.
         """
-        if max_conversation_length < 5:
+        if max_conversation_length < 1:
             raise ValueError(
-                "Invalid value for max_conversation_length. Please ensure that max_conversation_length is an integer greater than or equal to 5."
+                "Invalid value for max_conversation_length. Please ensure that max_conversation_length is an integer greater than or equal to 1."
             )
 
         return max_conversation_length
@@ -316,7 +316,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
     Args:
         model_info (str): The information about the AI model used in the experiment.
         experiment_context (str): The context or purpose of the experiment.
-        agent_profiles (pd.DataFrame): The demographic information of the agents participating in the experiment.
+        agent_profiles (pd.DataFrame): The profile information of the agents participating in the experiment.
         agent_roles (dict[str, str]): Dictionary mapping agent roles to their descriptions.
         experiment_id (str, optional): The unique ID of the experiment. Defaults to an empty string.
         num_agents_per_session (int, optional): Number of agents per session. Defaults to 2.
@@ -330,14 +330,14 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
 
     Raises:
         ValueError: If the provided num_sessions is not valid.
-        ValueError: If the provided num_agents_per_session is less than 2 or will exceed the total number of demographic information.
+        ValueError: If the provided num_agents_per_session is less than 2 or will exceed the total number of profile information.
         ValueError: If the provided number of agent_roles is not equal to num_agents_per_session.
         ValueError: If the number of roles defined does not match the number of agents assigned to each session.
 
     Attributes:
         model_info (str): The information about the AI model used in the experiment.
         experiment_context (str): The context or purpose of the experiment.
-        agent_profiles (pd.DataFrame): The demographic information of the agents participating in the experiment.
+        agent_profiles (pd.DataFrame): The profile information of the agents participating in the experiment.
         agent_roles (dict[str, str]): The roles assigned to agents.
         experiment_id (str): The unique ID of the experiment.
         num_agents_per_session (int): The number of agents per session.
@@ -464,12 +464,12 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
         """Generates a list of session IDs.
 
         If either the treatment assignment strategy or the agent assignment strategy is set to 'manual',
-        the function returns a list of unique session IDs from the agent demographics DataFrame.
+        the function returns a list of unique session IDs from the agent profiles DataFrame.
         Otherwise, it returns a list of sequential integers starting from 0 up to the number of sessions.
 
         Returns:
             List[Any]: A list of session IDs. If the assignment strategies are manual, the list contains unique session IDs
-                from the agent demographics DataFrame. Otherwise, it contains sequential integers starting from 0.
+                from the agent profiles DataFrame. Otherwise, it contains sequential integers starting from 0.
         """
         if (
             self.treatment_assignment_strategy == "manual"
@@ -536,12 +536,12 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
             )
 
     def assign_agents_to_session(self) -> dict[int, List[DemographicInfo]]:
-        """Assigns agents' demographics to each session based on the given number of agents per session and agent assignment strategy.
+        """Assigns agent profiles to each session based on the given number of agents per session and agent assignment strategy.
         However, if the agent_assignment_strategy is 'manual', then assign the agents to their respective sessions based on the
         assignment defined in agent_profiles.
 
         Returns:
-            dict[int, List[DemographicInfo]]: A dictionary mapping session IDs to a list of agent demographic information.
+            dict[int, List[DemographicInfo]]: A dictionary mapping session IDs to a list of agent profile information.
         """
         if self.agent_assignment_strategy == "manual":
             agent_to_session_assignment = {}
@@ -638,7 +638,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
             list[ConversationalSyntheticAgent]: A list of initialized ConversationalSyntheticAgent objects.
 
         Raises:
-            AssertionError: If the number of agents' demographics does not match the number of agent roles when initializing agents.
+            AssertionError: If the number of agent profiles does not match the number of agent roles when initializing agents.
         """
         assert len(session_info["agent_profiles"]) == len(
             self.agent_roles
@@ -651,7 +651,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
                     experiment_id=self.experiment_id,
                     experiment_context=self.experiment_context,
                     session_id=session_info["session_id"],
-                    demographic_info=agent_profile,
+                    profile_info=agent_profile,
                     role=list(self.agent_roles.keys())[i],
                     role_description=list(self.agent_roles.values())[i],
                     model_info=self.model_info,
@@ -693,7 +693,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
                 response = agent.respond(question="Start")
             else:
                 response = agent.respond(question=response)
-            agent_role = agent.demographic_info["ID"]
+            agent_role = agent.profile_info["ID"]
             conversation_length += 1
 
         message_history.append({agent_role: response})
@@ -727,7 +727,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
 
     Args:
         model_info (str): The information about the AI model used in the experiment.
-        agent_profiles (pd.DataFrame): The demographic information of the agents participating in the experiment.
+        agent_profiles (pd.DataFrame): The profile information of the agents participating in the experiment.
         agent_roles (dict[str, str]): Dictionary mapping agent roles to their descriptions.
         experiment_context (str, optional): The context or purpose of the experiment. Defaults to "This is an experiment involving AI agents."
         experiment_id (str, optional): The unique ID of the experiment. Defaults to an empty string.
@@ -743,7 +743,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
 
     Raises:
         ValueError: If the provided num_sessions is not valid.
-        ValueError: If the provided num_agents_per_session is less than 2 or will exceed the total number of demographic information.
+        ValueError: If the provided num_agents_per_session is less than 2 or will exceed the total number of profile information.
         ValueError: If the provided number of agent_roles is not equal to num_agents_per_session or if the first role is not Interviewer.
         ValueError: If the number of roles defined does not match the number of agents assigned to each session. Also if the first role is not Interviewer.
         ValueError: If the format of the interview script does not fit with the expected format.
@@ -751,7 +751,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
     Attributes:
         model_info (str): The information about the AI model used in the experiment.
         experiment_context (str): The context or purpose of the experiment.
-        agent_profiles (pd.DataFrame): The demographic information of the agents participating in the experiment.
+        agent_profiles (pd.DataFrame): The profile information of the agents participating in the experiment.
         agent_roles (dict[str, str]): Dictionary mapping agent roles to their descriptions.
         experiment_id (str): The unique ID of the experiment.
         num_agents_per_session (int, optional): Number of agents per session.
@@ -902,7 +902,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
         assignment defined in agent_profiles.
 
         Returns:
-            dict[int, List[DemographicInfo]]: A dictionary mapping session IDs to a list of agent demographic information.
+            dict[int, List[DemographicInfo]]: A dictionary mapping session IDs to a list of agent profile information.
         """
         if self.agent_assignment_strategy == "manual":
             agent_to_session_assignment = {}
@@ -1028,7 +1028,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                     experiment_id=self.experiment_id,
                     experiment_context=session_info["experiment_context"],
                     session_id=session_info["session_id"],
-                    demographic_info=agent_profile,
+                    profile_info=agent_profile,
                     role=list(self.agent_roles.keys())[i],
                     role_description=list(self.agent_roles.values())[i],
                     model_info=self.model_info,
