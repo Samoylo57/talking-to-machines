@@ -68,14 +68,6 @@ class Experiment:
 
         return experiment_id
 
-    def get_experiment_id(self) -> str:
-        """Return the experiment ID of the synthetic agent.
-
-        Returns:
-            str: The experiment ID of the synthetic agent.
-        """
-        return self.experiment_id
-
 
 class AIConversationalExperiment(Experiment):
     """A class representing an AI conversational experiment. Inherits from the Experiment base class.
@@ -314,54 +306,6 @@ class AIConversationalExperiment(Experiment):
 
         return treatments
 
-    def get_model_info(self) -> str:
-        """Return the model used in this experiment.
-
-        Returns:
-            str: The model information.
-        """
-        return self.model_info
-
-    def get_experiment_context(self) -> str:
-        """Return the experiment context.
-
-        Returns:
-            str: The experiment context.
-        """
-        return self.experiment_context
-
-    def get_agent_demographics(self) -> pd.DataFrame:
-        """Return the agents' demographic information for this experiment.
-
-        Returns:
-            pd.DataFrame: The agents' demographic information.
-        """
-        return self.agent_demographics
-
-    def get_max_conversation_length(self) -> int:
-        """Return the maximum length of a conversation for this experiment.
-
-        Returns:
-            int: The maximum length of a conversation.
-        """
-        return self.max_conversation_length
-
-    def get_treatments(self) -> dict[str, Any]:
-        """Return the treatments for this experiment.
-
-        Returns:
-            dict[str, Any]: The treatments for this experiment.
-        """
-        return self.treatments
-
-    def get_treatment_assignment_strategy(self) -> str:
-        """Return the treatment assignment strategy for this experiment.
-
-        Returns:
-            str: The treatments assignment strategy.
-        """
-        return self.treatment_assignment_strategy
-
 
 class AItoAIConversationalExperiment(AIConversationalExperiment):
     """A class representing an AI-to-AI conversational experiment. Inherits from the AIConversationalExperiment class.
@@ -381,8 +325,8 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
         treatments (dict[str, Any], optional): The treatments for the experiment. Defaults to an empty dictionary.
         treatment_assignment_strategy (str, optional): The strategy used for assigning treatments to sessions. Defaults to "simple_random".
         agent_assignment_strategy (str, optional): The strategy used for assigning agents to sessions. Defaults to "random".
-        treatment_column (str, optional): The column in agent_demographics that contains the manually assigned treatments. Defaults to an empty string.
-        session_column (str, optional): The column in agent_demographics that contains the manually assigned sessions. Defaults to an empty string.
+        treatment_column (str, optional): The column in agent_profiles that contains the manually assigned treatments. Defaults to an empty string.
+        session_column (str, optional): The column in agent_profiles that contains the manually assigned sessions. Defaults to an empty string.
 
     Raises:
         ValueError: If the provided num_sessions is not valid.
@@ -393,7 +337,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
     Attributes:
         model_info (str): The information about the AI model used in the experiment.
         experiment_context (str): The context or purpose of the experiment.
-        agent_demographics (pd.DataFrame): The demographic information of the agents participating in the experiment.
+        agent_profiles (pd.DataFrame): The demographic information of the agents participating in the experiment.
         agent_roles (dict[str, str]): The roles assigned to agents.
         experiment_id (str): The unique ID of the experiment.
         num_agents_per_session (int): The number of agents per session.
@@ -402,8 +346,8 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
         treatments (dict[str, Any]): The treatments for the experiment.
         treatment_assignment_strategy (str, optional): The strategy used for assigning treatments to agents.
         agent_assignment_strategy (str, optional): The strategy used for assigning agents to sessions.
-        treatment_column (str, optional): The column in agent_demographics that contains the manually assigned treatments.
-        session_column (str, optional): The column in agent_demographics that contains the manually assigned sessions.
+        treatment_column (str, optional): The column in agent_profiles that contains the manually assigned treatments.
+        session_column (str, optional): The column in agent_profiles that contains the manually assigned sessions.
         session_id_list (List[int]): List of session IDs.
         treatment_assignment (dict[int, str]): The assignment of treatments to agents.
         agent_assignment (dict[int, List[DemographicInfo]]): The assignment of agents to sessions.
@@ -490,9 +434,9 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
                 f"Unsupported num_agents_per_session: {num_agents_per_session}. For AI-AI conversation-based experiments, num_agents_per_session should be an integer that is equal to or greater than 2."
             )
 
-        if self.num_sessions * num_agents_per_session > len(self.agent_demographics):
+        if self.num_sessions * num_agents_per_session > len(self.agent_profiles):
             raise ValueError(
-                f"Total number of agents required for experiment ({self.num_sessions * num_agents_per_session}) exceed the number of profiles provided in agent_demographics ({len(self.agent_demographics)})."
+                f"Total number of agents required for experiment ({self.num_sessions * num_agents_per_session}) exceed the number of profiles provided in agent_profiles ({len(self.agent_profiles)})."
             )
 
         return num_agents_per_session
@@ -531,7 +475,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
             self.treatment_assignment_strategy == "manual"
             or self.agent_assignment_strategy == "manual"
         ):
-            return list(self.agent_demographics[self.session_column].unique())
+            return list(self.agent_profiles[self.session_column].unique())
         else:
             return list(range(self.num_sessions))
 
@@ -546,58 +490,10 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
 
         if not treatment_label_set.issuperset(manual_defined_treatments):
             raise ValueError(
-                f"The treatment labels defined in 'treatments' ({list[treatment_label_set]}) is not a superset of the manually defined treatments in agent_demographics ({list[manual_defined_treatments]})."
+                f"The treatment labels defined in 'treatments' ({list[treatment_label_set]}) is not a superset of the manually defined treatments in agent_profiles ({list[manual_defined_treatments]})."
             )
         else:
             pass
-
-    def get_num_sessions(self) -> int:
-        """Return the num_sessions defined this experiment.
-
-        Returns:
-            int: The num_sessions information.
-        """
-        return self.num_sessions
-
-    def get_num_agents_per_session(self) -> int:
-        """Return the num_agents_per_session defined this experiment.
-
-        Returns:
-            int: The num_agents_per_session information.
-        """
-        return self.num_agents_per_session
-
-    def get_agent_roles(self) -> dict[str, str]:
-        """Return the agent_roles defined this experiment.
-
-        Returns:
-            dict[str, str]: The agent_roles information.
-        """
-        return self.agent_roles
-
-    def get_treatment_assignment(self) -> dict[int, str]:
-        """Return the treatment_assignment defined this experiment.
-
-        Returns:
-            dict[int, str]: The treatment_assignment information.
-        """
-        return self.treatment_assignment
-
-    def get_session_id_list(self) -> List[int]:
-        """Return the session_id_list of this experiment.
-
-        Returns:
-            list[int]: The session_id_list information.
-        """
-        return self.session_id_list
-
-    def get_agent_assignment(self) -> dict[int, list[DemographicInfo]]:
-        """Return the agent_assignment for this experiment.
-
-        Returns:
-            dict[int, list[DemographicInfo]]: The agent_assignment information.
-        """
-        return self.agent_assignment
 
     def assign_treatment(self) -> dict[int, str]:
         """Assign treatments to sessions based on the specified treatment assignment strategy.
@@ -628,7 +524,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
 
         elif self.treatment_assignment_strategy == "manual":
             return manual_assignment_session(
-                self.agent_demographics,
+                self.agent_profiles,
                 self.treatment_column,
                 self.session_column,
                 self.session_id_list,
@@ -642,7 +538,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
     def assign_agents_to_session(self) -> dict[int, List[DemographicInfo]]:
         """Assigns agents' demographics to each session based on the given number of agents per session and agent assignment strategy.
         However, if the agent_assignment_strategy is 'manual', then assign the agents to their respective sessions based on the
-        assignment defined in agent_demographics.
+        assignment defined in agent_profiles.
 
         Returns:
             dict[int, List[DemographicInfo]]: A dictionary mapping session IDs to a list of agent demographic information.
@@ -650,8 +546,8 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
         if self.agent_assignment_strategy == "manual":
             agent_to_session_assignment = {}
             for i, session_id in enumerate(self.session_id_list):
-                session_participants = self.agent_demographics[
-                    self.agent_demographics[self.session_column] == session_id
+                session_participants = self.agent_profiles[
+                    self.agent_profiles[self.session_column] == session_id
                 ]
 
                 if self.treatment_assignment_strategy == "manual":
@@ -674,14 +570,14 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
                 )
 
         else:
-            randomised_agent_demographics = self.agent_demographics.sample(
-                frac=1
-            ).reset_index(drop=True)
+            randomised_agent_profiles = self.agent_profiles.sample(frac=1).reset_index(
+                drop=True
+            )
 
             agent_to_session_assignment = {}
             for i, session_id in enumerate(self.session_id_list):
                 agent_to_session_assignment[session_id] = (
-                    randomised_agent_demographics.iloc[
+                    randomised_agent_profiles.iloc[
                         i
                         * self.num_agents_per_session : (i + 1)
                         * self.num_agents_per_session
@@ -718,7 +614,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
                     treatment=session_info["treatment"],
                 )
             )
-            session_info["agents_"] = self.agent_assignment[session_id]
+            session_info["agent_profiles"] = self.agent_assignment[session_id]
             session_info["agents"] = self.initialize_agents(session_info)
             session_info = self.run_session(session_info, test_mode=test_mode)
             session_info["agents"] = [
@@ -736,7 +632,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
         """Initializes and returns a list of ConversationalSyntheticAgent objects based on the provided session information.
 
         Args:
-            session_info (dict[str, Any]): A dictionary containing session information, including agents' demographics, session ID, treatment, etc.
+            session_info (dict[str, Any]): A dictionary containing session information, including agents' profile, session ID, treatment, etc.
 
         Returns:
             list[ConversationalSyntheticAgent]: A list of initialized ConversationalSyntheticAgent objects.
@@ -744,21 +640,22 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
         Raises:
             AssertionError: If the number of agents' demographics does not match the number of agent roles when initializing agents.
         """
-        assert len(session_info["agents_demographic"]) == len(
+        assert len(session_info["agent_profiles"]) == len(
             self.agent_roles
-        ), "Number of agents' demographics does not match the number of agent roles when initialising agents."
+        ), "Number of agent profiles does not match the number of agent roles when initialising agents."
         agent_list = []
-        for i in range(len(session_info["agents_demographic"])):
-            agent_demographic = session_info["agents_demographic"][i]
+        for i in range(len(session_info["agent_profiles"])):
+            agent_profile = session_info["agent_profiles"][i]
             agent_list.append(
                 ConversationalSyntheticAgent(
                     experiment_id=self.experiment_id,
                     experiment_context=self.experiment_context,
                     session_id=session_info["session_id"],
-                    demographic_info=agent_demographic,
+                    demographic_info=agent_profile,
                     role=list(self.agent_roles.keys())[i],
                     role_description=list(self.agent_roles.values())[i],
                     model_info=self.model_info,
+                    api_endpoint=self.api_endpoint,
                     treatment=session_info["treatment"],
                 )
             )
@@ -798,6 +695,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
                 response = agent.respond(question=response)
             agent_role = agent.demographic_info["ID"]
             conversation_length += 1
+
         message_history.append({agent_role: response})
         message_history.append({"system": "End"})
         if test_mode:
