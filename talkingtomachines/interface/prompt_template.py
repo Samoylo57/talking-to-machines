@@ -13,7 +13,7 @@ PROMPT_TEMPLATE_SHEETS = [
     "agent_roles",
     "prompts_template",
     "constants",
-    "agent_demographics",
+    "agent_profiles",
 ]
 
 
