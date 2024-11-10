@@ -1099,7 +1099,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                         else:
                             response = agent.respond(question=response)
 
-                        agent_role = agent.get_role()
+                        agent_role = agent.role
                         message_history.append({agent_role: response})
                         if test_mode:
                             print({agent_role: response})
@@ -1127,7 +1127,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                         else:
                             response = agent.respond(question=response)
 
-                        agent_role = agent.get_role()
+                        agent_role = agent.role
                         message_history.append({agent_role: response})
                         if test_mode:
                             print({agent_role: response})
@@ -1151,7 +1151,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                         else:
                             response = agent.respond(question=interview_question)
 
-                        agent_role = agent.get_role()
+                        agent_role = agent.role
                         message_history.append({agent_role: response})
                         if test_mode:
                             print({agent_role: response})
@@ -1176,7 +1176,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                     response = agent.respond(question="Start")
                 else:
                     response = agent.respond(question=response)
-                agent_role = agent.get_role()
+                agent_role = agent.role
                 conversation_length += 1
 
             message_history.append({agent_role: response})

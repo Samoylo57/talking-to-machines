@@ -11,6 +11,7 @@ class Config:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "openai_api_key")
     QUALTRICS_API_KEY = os.getenv("QUALTRICS_API_KEY", "your_qualtrics_api_key")
     OTREE_API_KEY = os.getenv("OTREE_API_KEY", "your_otree_api_key")
+    HF_TOKEN = os.getenv("HF_TOKEN", "huggingface_token")
 
 
 class DevelopmentConfig(Config):

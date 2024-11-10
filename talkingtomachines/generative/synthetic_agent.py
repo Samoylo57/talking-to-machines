@@ -1,11 +1,13 @@
 from typing import Any, List, Callable
 from talkingtomachines.generative.prompt import (
     generate_conversational_agent_system_message,
-    generate_demographic_prompt,
+    generate_profile_prompt,
 )
 from talkingtomachines.generative.llm import query_llm
+from openai import OpenAI
+from talkingtomachines.config import DevelopmentConfig
 
-DemographicInfo = dict[str, Any]
+ProfileInfo = dict[str, Any]
 
 
 class SyntheticAgent:
@@ -15,19 +17,21 @@ class SyntheticAgent:
         experiment_id (str): The ID of the experiment.
         experiment_context (str): The context of the experiment.
         session_id (int): The ID of the session.
-        demographic_info (DemographicInfo): The demographic information of the user.
+        profile_info (ProfileInfo): The profile information of the user.
         model_info (str): The information about the model used by the agent.
-        demographic_prompt_generator (Callable[[DemographicInfo], str], optional):
-            A function that generates a demographic prompt based on the demographic information.
-            Defaults to generate_demographic_prompt.
+        api_endpoint (str, optional): API endpoint to the LLM model if the model is hosted externally.
+        profile_prompt_generator (Callable[[ProfileInfo], str], optional):
+            A function that generates a profile prompt based on the profile information.
+            Defaults to generate_profile_prompt.
 
     Attributes:
         experiment_id (str): The ID of the experiment.
         experiment_context (str): The context of the experiment.
         session_id (int): The ID of the session.
-        demographic_info (DemographicInfo): The demographic information of the user.
-        demographic_prompt (str): A prompt string containing the demographic information of the user.
+        profile_info (ProfileInfo): The profile information of the user.
+        profile_prompt (str): A prompt string containing the profile information of the user.
         model_info (str): The information about the model used by the agent.
+        llm_client (OpenAI): The LLM client.
     """
 
     def __init__(
@@ -35,66 +39,52 @@ class SyntheticAgent:
         experiment_id: str,
         experiment_context: str,
         session_id: int,
-        demographic_info: DemographicInfo,
+        profile_info: ProfileInfo,
         model_info: str,
-        demographic_prompt_generator: Callable[
-            [DemographicInfo], str
-        ] = generate_demographic_prompt,
+        api_endpoint: str,
+        profile_prompt_generator: Callable[
+            [ProfileInfo], str
+        ] = generate_profile_prompt,
     ):
         self.experiment_id = experiment_id
         self.experiment_context = experiment_context
         self.session_id = session_id
-        self.demographic_info = demographic_info
-        self.demographic_prompt = demographic_prompt_generator(demographic_info)
+        self.profile_info = profile_info
+        self.profile_prompt = profile_prompt_generator(profile_info)
         self.model_info = model_info
+        self.llm_client = self.initialise_llm_client(self.model_info, api_endpoint)
 
-    def get_experiment_id(self) -> str:
-        """Return the experiment ID of the synthetic agent.
+    def initialise_llm_client(self, model_info: str, api_endpoint: str = ""):
+        """Initialise a language model client based on the provided model information.
 
-        Returns:
-            str: The experiment ID of the synthetic agent.
-        """
-        return self.experiment_id
-
-    def get_experiment_context(self) -> str:
-        """Return the experiment context of the synthetic agent.
-
-        Returns:
-            str: The experiment context of the synthetic agent.
-        """
-        return self.experiment_context
-
-    def get_session_id(self) -> int:
-        """Return the session ID of the experiment.
+        Args:
+            model_info (str): The identifier for the language model to be used.
+                      Supported values are "gpt-4o", "gpt-4o-mini", "gpt-4-turbo",
+                      "gpt-4", "gpt-3.5-turbo", and "hf-inference".
+            api_endpoint (str, optional): The API endpoint to be used for the "hf-inference" model.
+                          Defaults to an empty string.
 
         Returns:
-            int: The session ID of the experiment.
+            OpenAI: An instance of the OpenAI client configured with the appropriate API key
+                and endpoint based on the model information.
+
+        Raises:
+            ValueError: If the provided model_info is not supported.
         """
-        return self.session_id
+        if model_info in [
+            "gpt-4o",
+            "gpt-4o-mini",
+            "gpt-4-turbo",
+            "gpt-4",
+            "gpt-3.5-turbo",
+        ]:
+            return OpenAI(api_key=DevelopmentConfig.OPENAI_API_KEY)
 
-    def get_demographic_info(self) -> DemographicInfo:
-        """Return the demographic information of the synthetic agent.
+        elif model_info in ["hf-inference"]:
+            return OpenAI(base_url=api_endpoint, api_key=DevelopmentConfig.HF_TOKEN)
 
-        Returns:
-            str: The demographic information of the synthetic agent
-        """
-        return self.demographic_info
-
-    def get_demographic_prompt(self) -> str:
-        """Return the demographic prompt of the synthetic agent.
-
-        Returns:
-            str: The demographic prompt of the synthetic agent
-        """
-        return self.demographic_prompt
-
-    def get_model_info(self) -> str:
-        """Return the model information of the synthetic agent.
-
-        Returns:
-            str: The model information of the synthetic agent
-        """
-        return self.model_info
+        else:
+            raise ValueError(f"{model_info} is not supported.")
 
     def to_dict(self) -> dict[str, Any]:
         """Converts the SyntheticAgent object to a dictionary.
@@ -106,8 +96,8 @@ class SyntheticAgent:
             "experiment_id": self.experiment_id,
             "experiment_context": self.experiment_context,
             "session_id": self.session_id,
-            "demographic_info": self.demographic_info,
-            "demographic_prompt": self.demographic_prompt,
+            "profile_info": self.profile_info,
+            "profile_prompt": self.profile_prompt,
             "model_info": self.model_info,
         }
 
@@ -132,22 +122,24 @@ class ConversationalSyntheticAgent(SyntheticAgent):
         experiment_id (str): The ID of the experiment.
         experiment_context (str): The context of the experiment.
         session_id (int): The ID of the session.
-        demographic_info (DemographicInfo): The demographic information of the user.
+        profile_info (ProfileInfo): The profile information of the user.
         role (str): The name of the role assigned to the agent.
         role_description (str): The description of the role assigned to the agent.
         model_info (str): The information about the model used by the agent.
+        api_endpoint (str, optional): API endpoint to the LLM model if the model is hosted externally.
         treatment (str): The treatment assigned to the session.
-        demographic_prompt_generator (Callable[[DemographicInfo], str], optional):
-            A function that generates a demographic prompt based on the demographic information.
-            Defaults to generate_demographic_prompt.
+        profile_prompt_generator (Callable[[ProfileInfo], str], optional):
+            A function that generates a profile prompt based on the profile information.
+            Defaults to generate_profile_prompt.
 
     Attributes:
         experiment_id (str): The ID of the experiment.
         experiment_context (str): The context of the experiment.
         session_id (int): The ID of the session.
-        demographic_info (DemographicInfo): The demographic information of the user.
-        demographic_prompt (str): A prompt string containing the demographic information of the user.
+        profile_info (ProfileInfo): The profile information of the user.
+        profile_prompt (str): A prompt string containing the profile information of the user.
         model_info (str): The information about the model used by the agent.
+        llm_client (OpenAI): The LLM client.
         role (str): The name of the role assigned to the agent.
         role_description (str): The description of the role assigned to the agent.
         treatment (str): The treatment assigned to the session.
@@ -160,22 +152,24 @@ class ConversationalSyntheticAgent(SyntheticAgent):
         experiment_id: str,
         experiment_context: str,
         session_id: int,
-        demographic_info: DemographicInfo,
+        profile_info: ProfileInfo,
         role: str,
         role_description: str,
         model_info: str,
+        api_endpoint: str,
         treatment: str,
-        demographic_prompt_generator: Callable[
-            [DemographicInfo], str
-        ] = generate_demographic_prompt,
+        profile_prompt_generator: Callable[
+            [ProfileInfo], str
+        ] = generate_profile_prompt,
     ):
         super().__init__(
             experiment_id,
             experiment_context,
             session_id,
-            demographic_info,
+            profile_info,
             model_info,
-            demographic_prompt_generator,
+            api_endpoint,
+            profile_prompt_generator,
         )
         self.role = role
         self.role_description = role_description
@@ -184,51 +178,11 @@ class ConversationalSyntheticAgent(SyntheticAgent):
             experiment_context=self.experiment_context,
             treatment=self.treatment,
             role_description=self.role_description,
-            demographic_info=self.demographic_prompt,
+            profile_prompt=self.profile_prompt,
         )
         self.message_history = [
             {"role": "system", "content": self.system_message},
         ]
-
-    def get_role(self) -> str:
-        """Return the assigned role of the synthetic agent.
-
-        Returns:
-            str: The assigned role of the synthetic agent.
-        """
-        return self.role
-
-    def get_role_description(self) -> str:
-        """Return the description of the synthetic agent's role.
-
-        Returns:
-            str: The description of the synthetic agent's role.
-        """
-        return self.role_description
-
-    def get_treatment(self) -> str:
-        """Return the treatment assigned to the session.
-
-        Returns:
-            str: The treatment assigned to the session.
-        """
-        return self.treatment
-
-    def get_system_message(self) -> str:
-        """Return the system message of the synthetic agent.
-
-        Returns:
-            str: The system message of the synthetic agent.
-        """
-        return self.system_message
-
-    def get_message_history(self) -> List[dict]:
-        """Return the message history of the synthetic agent.
-
-        Returns:
-            List[dict]: The conversation history of the synthetic agent
-        """
-        return self.message_history
 
     def to_dict(self) -> dict[str, Any]:
         """Converts the ConversationalSyntheticAgent object to a dictionary.
@@ -240,8 +194,8 @@ class ConversationalSyntheticAgent(SyntheticAgent):
             "experiment_id": self.experiment_id,
             "experiment_context": self.experiment_context,
             "session_id": self.session_id,
-            "demographic_info": self.demographic_info,
-            "demographic_prompt": self.demographic_prompt,
+            "profile_info": self.profile_info,
+            "profile_prompt": self.profile_prompt,
             "model_info": self.model_info,
             "role": self.role,
             "role_description": self.role_description,
@@ -274,6 +228,7 @@ class ConversationalSyntheticAgent(SyntheticAgent):
         try:
             self.update_message_history(message=question, role="assistant")
             response = query_llm(
+                llm_client=self.llm_client,
                 model_info=self.model_info,
                 message_history=self.message_history,
             )
