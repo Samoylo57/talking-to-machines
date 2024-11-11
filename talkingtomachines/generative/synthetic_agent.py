@@ -1,4 +1,4 @@
-from typing import Any, List, Callable
+from typing import Any, Callable
 from talkingtomachines.generative.prompt import (
     generate_conversational_agent_system_message,
     generate_profile_prompt,

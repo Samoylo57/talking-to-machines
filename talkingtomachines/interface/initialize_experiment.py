@@ -51,9 +51,12 @@ def generate_permutations(constants: dict) -> list:
     Returns:
         list: A list of dictionaries, each containing a unique permutation of the constants.
     """
-    keys, values = zip(*constants.items())
-    constant_permutations = [dict(zip(keys, v)) for v in itertools.product(*values)]
-    return constant_permutations
+    if constants:
+        keys, values = zip(*constants.items())
+        constant_permutations = [dict(zip(keys, v)) for v in itertools.product(*values)]
+        return constant_permutations
+    else:
+        return [{}]
 
 
 def initialize_experiment(prompt_template_data: dict) -> list:

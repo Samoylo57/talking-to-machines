@@ -5,7 +5,7 @@ import re
 from tqdm import tqdm
 from talkingtomachines.generative.synthetic_agent import (
     ConversationalSyntheticAgent,
-    DemographicInfo,
+    ProfileInfo,
 )
 from talkingtomachines.management.treatment import (
     simple_random_assignment_session,
@@ -346,7 +346,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
         session_column (str, optional): The column in agent_profiles that contains the manually assigned sessions.
         session_id_list (List[int]): List of session IDs.
         treatment_assignment (dict[int, str]): The assignment of treatments to agents.
-        agent_assignment (dict[int, List[DemographicInfo]]): The assignment of agents to sessions.
+        agent_assignment (dict[int, List[ProfileInfo]]): The assignment of agents to sessions.
     """
 
     def __init__(
@@ -531,13 +531,13 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
                 f"Unsupported treatment_assignment_strategy: {self.treatment_assignment_strategy}. Supported strategies are: {SUPPORTED_TREATMENT_ASSIGNMENT_STRATEGIES}."
             )
 
-    def assign_agents_to_session(self) -> dict[int, List[DemographicInfo]]:
+    def assign_agents_to_session(self) -> dict[int, List[ProfileInfo]]:
         """Assigns agent profiles to each session based on the given number of agents per session and agent assignment strategy.
         However, if the agent_assignment_strategy is 'manual', then assign the agents to their respective sessions based on the
         assignment defined in agent_profiles.
 
         Returns:
-            dict[int, List[DemographicInfo]]: A dictionary mapping session IDs to a list of agent profile information.
+            dict[int, List[ProfileInfo]]: A dictionary mapping session IDs to a list of agent profile information.
         """
         if self.agent_assignment_strategy == "manual":
             agent_to_session_assignment = {}
@@ -761,7 +761,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
         interview_script (dict[int, Any], optional): A dictionary containing the interview script that the interviewer agent has to follow.
         treatment_assignment (dict[int, str]): The assignment of treatments to agents.
         session_id_list (List[Any]): List of session IDs.
-        agent_assignment (dict[int, list[DemographicInfo]]): The assignment of agents to sessions.
+        agent_assignment (dict[int, list[ProfileInfo]]): The assignment of agents to sessions.
     """
 
     def __init__(
@@ -892,13 +892,13 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
 
         return agent_roles
 
-    def assign_agents_to_session(self) -> dict[int, List[DemographicInfo]]:
+    def assign_agents_to_session(self) -> dict[int, List[ProfileInfo]]:
         """Assigns agent profiles to each session based on the given number of agents per session (minus the Interviewer agent) and agent assignment strategy.
         However, if the agent_assignment_strategy is 'manual', then assign the agents to their respective sessions based on the
         assignment defined in agent_profiles.
 
         Returns:
-            dict[int, List[DemographicInfo]]: A dictionary mapping session IDs to a list of agent profile information.
+            dict[int, List[ProfileInfo]]: A dictionary mapping session IDs to a list of agent profile information.
         """
         if self.agent_assignment_strategy == "manual":
             agent_to_session_assignment = {}
@@ -1158,7 +1158,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
 
                 else:
                     raise ValueError(
-                        f"The type of prompt ({round["type"]}) for each interview round should either be 'context' or 'question'."
+                        f"The type of prompt ({round['type']}) for each interview round should either be 'context' or 'question'."
                     )
 
         else:

@@ -1,7 +1,6 @@
 import random
 import pandas as pd
-from talkingtomachines.generative.synthetic_agent import DemographicInfo
-from typing import List, Any, Tuple
+from typing import List, Any
 from itertools import product
 
 
