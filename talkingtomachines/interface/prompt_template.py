@@ -128,6 +128,7 @@ def generate_regex_for_response_options(response_options: str) -> list:
 
     for option in options:
         option = option.strip()
+
         if ":" in option:
             start, end = option.split(":")
             start = start.strip()
@@ -135,32 +136,43 @@ def generate_regex_for_response_options(response_options: str) -> list:
 
             try:
                 if start == "":
-                    start = "-inf"
+                    start = float("-inf")
                 else:
                     start = int(start)
 
                 if end == "":
-                    end = "inf"
+                    end = float("inf")
                 else:
                     end = int(end)
 
-                if start == "-inf" and end == "inf":  # No upper or lower bound
-                    condition = r"-?\d+"
-                elif start == "-inf":  # No lower bound
-                    condition = rf"-?\d+|{end}"
-                elif end == "inf":  # No upper bound
-                    condition = rf"{start}|-?\d+"
-                else:  # Both upper and lower bound defined
-                    condition = rf"{start}|{end}|-?\d+"
+                # Create the regex pattern based on the bounds
+                if start == float("-inf") and end == float(
+                    "inf"
+                ):  # No upper or lower bound
+                    condition = r"\d+"
+                elif start == float("-inf"):  # No lower bound, only upper bound
+                    condition = rf"\b([0-9]|[1-9][0-9]{{0,{len(str(end)) - 1}}})\b"  # Matches up to 'end'
+                elif end == float("inf"):  # No upper bound, only lower bound
+                    condition = (
+                        rf"\b({start}[0-9]*)\b"  # Matches 'start' and numbers after it
+                    )
+                else:  # Both upper and lower bounds defined
+                    if start == end:
+                        condition = rf"\b{start}\b"  # Exact match if start == end
+                    else:
+                        # Regex pattern for inclusive range from 'start' to 'end'
+                        condition = rf"\b({start}|{end}|\d{{1,{max(len(str(start)), len(str(end)))}}})\b"
+
                 regex_patterns.append(condition)
 
             except ValueError:
                 warnings.warn(
                     f"The following prompt {option} contains ':' indicating a range of numerical values; however, it is not a valid range. This response option will be treated as a categorical option."
                 )
-                regex_patterns.append(re.escape(option.lower()))
+                regex_patterns.append(rf"\b{re.escape(option.lower())}\b")
         else:
-            regex_patterns.append(re.escape(option.lower()))
+            # regex_patterns.append(re.escape(option.lower()))
+            regex_patterns.append(rf"\b{re.escape(option.lower())}\b")
 
     combined_regex = "|".join(regex_patterns)
     return combined_regex
@@ -187,7 +199,7 @@ def insert_response_options(row: pd.Series) -> str:
         options = row["response_options"].split(";")
         return row["experiment_prompt"].replace(
             "{response_options}",
-            f'{", ".join([f"{repr(option)}" for option in options[:-1]])} or {repr(options[-1])}',
+            f'{", ".join([f"{repr(option.strip())}" for option in options[:-1]])} or {repr(options[-1].strip())}',
         )
 
     else:

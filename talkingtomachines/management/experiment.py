@@ -1,7 +1,6 @@
 from typing import Any, List
 import pandas as pd
 import datetime
-import re
 from tqdm import tqdm
 from talkingtomachines.generative.synthetic_agent import (
     ConversationalSyntheticAgent,
@@ -38,7 +37,6 @@ SUPPORTED_AGENT_ASSIGNMENT_STRATEGIES = [
     "random",
     "manual",
 ]
-NUM_RETRY = 3
 
 
 class Experiment:
@@ -1035,26 +1033,6 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
 
         return agent_list
 
-    def validate_response(self, agent, question, regex_pattern):
-        """
-        Validates the agent's response against the given regex pattern.
-
-        Args:
-            agent (ConversationalSyntheticAgent): The agent object that provides responses.
-            question (str): The question for the agent to respond to.
-            regex_pattern (str): The compiled regex pattern to validate against.
-
-        Returns:
-            str: The validated response or the last response after 3 attempts.
-        """
-        regex_pattern = re.compile(regex_pattern)
-        for _ in range(NUM_RETRY):
-            response = agent.respond(question=question)
-            match = regex_pattern.search(response)
-            if match:
-                return match.group(0)
-        return response
-
     def run_session(
         self,
         session_info: dict[str, Any],
@@ -1083,7 +1061,6 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
         if experiment_prompts:
             for round in experiment_prompts:
                 interview_question = round.get("experiment_prompt", "")
-
                 if interview_question == "":
                     # Interviewer is keeping silent to facilitate discussion among subjects
                     for agent in session_info["agents"][1:]:
@@ -1093,14 +1070,20 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                             and round["response_validation"] == 1
                         ):
                             # Handle response options and validation
-                            response = self.validate_response(
-                                agent, response, round["response_options"]
+                            response = agent.respond(
+                                question=response, validation=round["response_options"]
                             )
                         else:
                             response = agent.respond(question=response)
 
                         agent_role = agent.role
-                        message_history.append({agent_role: response})
+                        message_history.append(
+                            {
+                                agent_role: response,
+                                "id": round.get("id", None),
+                                "var_name": round.get("var_name", None),
+                            }
+                        )
                         if test_mode:
                             print({agent_role: response})
 
@@ -1121,14 +1104,20 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                             and round["response_validation"] == 1
                         ):
                             # Handle response options and validation
-                            response = self.validate_response(
-                                agent, response, round["response_options"]
+                            response = agent.respond(
+                                question=response, validation=round["response_options"]
                             )
                         else:
                             response = agent.respond(question=response)
 
                         agent_role = agent.role
-                        message_history.append({agent_role: response})
+                        message_history.append(
+                            {
+                                agent_role: response,
+                                "id": round.get("id", None),
+                                "var_name": round.get("var_name", None),
+                            }
+                        )
                         if test_mode:
                             print({agent_role: response})
 
@@ -1145,14 +1134,21 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                             and round["response_validation"] == 1
                         ):
                             # Handle response options and validation
-                            response = self.validate_response(
-                                agent, interview_question, round["response_options"]
+                            response = agent.respond(
+                                question=interview_question,
+                                validation=round["response_options"],
                             )
                         else:
                             response = agent.respond(question=interview_question)
 
                         agent_role = agent.role
-                        message_history.append({agent_role: response})
+                        message_history.append(
+                            {
+                                agent_role: response,
+                                "id": round.get("id", None),
+                                "var_name": round.get("var_name", None),
+                            }
+                        )
                         if test_mode:
                             print({agent_role: response})
 
@@ -1166,7 +1162,9 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                 "Thank you for the conversation" not in response
                 and conversation_length < self.max_conversation_length
             ):
-                message_history.append({agent_role: response})
+                message_history.append(
+                    {agent_role: response, "id": conversation_length}
+                )
                 if test_mode:
                     print({agent_role: response})
                     print()
@@ -1179,7 +1177,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                 agent_role = agent.role
                 conversation_length += 1
 
-            message_history.append({agent_role: response})
+            message_history.append({agent_role: response, "id": conversation_length})
             if test_mode:
                 print({agent_role: response})
                 print()

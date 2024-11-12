@@ -22,7 +22,6 @@ def query_llm(llm_client: Any, model_info: str, message_history: List[dict]) -> 
     elif model_info in ["hf-inference"]:
         return query_hugging_face(
             llm_client=llm_client,
-            model_info=model_info,
             message_history=message_history,
         )
     else:
@@ -69,7 +68,7 @@ def query_hugging_face(llm_client: OpenAI, message_history: List[dict]) -> str:
     """
     try:
         response = llm_client.chat.completions.create(
-            model="tgi", messages=message_history, max_tokens=4096, stream=False
+            model="tgi", messages=message_history, stream=False
         )
 
         return response.choices[0].message.content
