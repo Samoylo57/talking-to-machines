@@ -237,7 +237,7 @@ class ConversationalSyntheticAgent(SyntheticAgent):
             )
             match = regex_pattern.search(response)
             if match:
-                return match.group(0).lower().capitalize()
+                return match.group(0).lower().title()
         return response
 
     def respond(self, question: str, validation: str = None) -> str:

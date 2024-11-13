@@ -616,7 +616,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
             ]
             experiment["sessions"][session_id] = session_info
 
-        self.save_experiment(experiment)
+        self.save_experiment(experiment, save_results_as_csv=False)
 
         return experiment
 
@@ -700,16 +700,20 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
         session_info["message_history"] = message_history
         return session_info
 
-    def save_experiment(self, experiment: dict[int, Any]) -> None:
+    def save_experiment(
+        self, experiment: dict[int, Any], save_results_as_csv: bool = False
+    ) -> None:
         """Save the experimental data.
 
         Args:
             experiment (dict[int, Any]): The experiment data to be saved.
+            save_results_as_csv (bool, optional): Indicates whether the results of the experiment will be saved as CSV format.
+                Defaults to False
 
         Returns:
             None
         """
-        save_experiment(experiment)
+        save_experiment(experiment, save_results_as_csv)
 
 
 class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
@@ -943,7 +947,10 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
         return agent_to_session_assignment
 
     def run_experiment(
-        self, test_mode: bool = True, version: int = 1
+        self,
+        test_mode: bool = True,
+        version: int = 1,
+        save_results_as_csv: bool = False,
     ) -> dict[str, Any]:
         """Runs an experiment based on the experimental settings defined during class initialisation. If test_mode is set to True, the first session will be selected and run.
 
@@ -952,6 +959,8 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                 Defaults to True.
             version (int, optional): Indicates the version of the experiment.
                 Defaults to 1.
+            save_results_as_csv (bool, optional): Indicates whether the results of the experiment will be saved as CSV format.
+                Defaults to False
 
         Returns:
             dict[str, Any]: A dictionary containing the experiment ID and session information.
@@ -988,7 +997,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
             ]
             experiment["sessions"][session_id] = session_info
 
-        self.save_experiment(experiment)
+        self.save_experiment(experiment, save_results_as_csv=save_results_as_csv)
 
         return experiment
 
@@ -1079,8 +1088,9 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                         agent_role = agent.role
                         message_history.append(
                             {
-                                agent_role: response,
-                                "id": round.get("id", None),
+                                "agent_response": response,
+                                "agent_id": agent.profile_info["ID"],
+                                "prompt_id": round.get("id", None),
                                 "var_name": round.get("var_name", None),
                             }
                         )
@@ -1114,7 +1124,8 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                         message_history.append(
                             {
                                 agent_role: response,
-                                "id": round.get("id", None),
+                                "agent_id": agent.profile_info["ID"],
+                                "prompt_id": round.get("id", None),
                                 "var_name": round.get("var_name", None),
                             }
                         )
@@ -1145,7 +1156,8 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                         message_history.append(
                             {
                                 agent_role: response,
-                                "id": round.get("id", None),
+                                "agent_id": agent.profile_info["ID"],
+                                "prompt_id": round.get("id", None),
                                 "var_name": round.get("var_name", None),
                             }
                         )
@@ -1163,7 +1175,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                 and conversation_length < self.max_conversation_length
             ):
                 message_history.append(
-                    {agent_role: response, "id": conversation_length}
+                    {agent_role: response, "prompt_id": conversation_length}
                 )
                 if test_mode:
                     print({agent_role: response})
@@ -1177,7 +1189,9 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                 agent_role = agent.role
                 conversation_length += 1
 
-            message_history.append({agent_role: response, "id": conversation_length})
+            message_history.append(
+                {agent_role: response, "prompt_id": conversation_length}
+            )
             if test_mode:
                 print({agent_role: response})
                 print()

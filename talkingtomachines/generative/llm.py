@@ -1,5 +1,8 @@
+import time
 from typing import List, Any
 from openai import OpenAI
+
+RETRY_DELAY = 600
 
 
 def query_llm(llm_client: Any, model_info: str, message_history: List[dict]) -> str:
@@ -43,16 +46,19 @@ def query_open_ai(
     Returns:
         str: Response from the LLM.
     """
-    try:
-        response = llm_client.chat.completions.create(
-            model=model_info, messages=message_history
-        )
-        return response.choices[0].message.content
+    while True:
+        try:
+            response = llm_client.chat.completions.create(
+                model=model_info, messages=message_history, stream=False
+            )
+            return response.choices[0].message.content
 
-    except Exception as e:
-        # Log the exception
-        print(f"Error during OpenAI API call: {e}")
-        return ""
+        except Exception as e:
+            # Log the exception
+            print(
+                f"Error during OpenAI API call: {e}. Retrying in {RETRY_DELAY // 60} mins..."
+            )
+            time.sleep(RETRY_DELAY)
 
 
 def query_hugging_face(llm_client: OpenAI, message_history: List[dict]) -> str:
@@ -66,14 +72,17 @@ def query_hugging_face(llm_client: OpenAI, message_history: List[dict]) -> str:
     Returns:
         str: Response from the LLM.
     """
-    try:
-        response = llm_client.chat.completions.create(
-            model="tgi", messages=message_history, stream=False
-        )
+    while True:
+        try:
+            response = llm_client.chat.completions.create(
+                model="tgi", messages=message_history, stream=False
+            )
 
-        return response.choices[0].message.content
+            return response.choices[0].message.content
 
-    except Exception as e:
-        # Log the exception
-        print(f"Error during Hugging Face API call: {e}")
-        return ""
+        except Exception as e:
+            # Log the exception
+            print(
+                f"Error during Hugging Face API call: {e}. Retrying in {RETRY_DELAY // 60} mins..."
+            )
+            time.sleep(RETRY_DELAY)

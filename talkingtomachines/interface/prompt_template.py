@@ -398,7 +398,9 @@ def main():
     if user_input == "y":
         print("Experiment has started.")
         for idx, experiment in tqdm(enumerate(experiment_list)):
-            experiment.run_experiment(test_mode=args.test_mode, version=idx + 1)
+            experiment.run_experiment(
+                test_mode=args.test_mode, version=idx + 1, save_results_as_csv=True
+            )
         print("Experiment is completed successfully.")
     else:
         print("Experiment is terminated by the user.")
