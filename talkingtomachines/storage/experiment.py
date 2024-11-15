@@ -4,7 +4,9 @@ from typing import Any
 import json
 
 
-def save_experiment(experiment: dict[int, Any], save_results_as_csv: bool = False) -> None:
+def save_experiment(
+    experiment: dict[int, Any], save_results_as_csv: bool = False
+) -> None:
     """Save an experiment to a local JSON file in the storage/experiment folder at the root directory.
 
     Args:
@@ -26,38 +28,60 @@ def save_experiment(experiment: dict[int, Any], save_results_as_csv: bool = Fals
 
 def save_experiment_as_csv(file_name: str) -> None:
     """Reads a JSON file containing experiment data, processes the data to extract relevant information,
-    and saves the result as an Excel file.
-    
+    and saves the result as a CSV file.
+
     Args:
         file_name (str): The path to the JSON file containing the experiment data.
     """
-    with open(file_name, 'r') as file:
+    with open(file_name, "r") as file:
         json_output = json.load(file)
 
-    role_labels = set([agent["role"] for agent in json_output["sessions"][next(iter(json_output["sessions"]))]["agents"]])
+    role_labels = set(
+        [
+            agent["role"]
+            for agent in json_output["sessions"][next(iter(json_output["sessions"]))][
+                "agents"
+            ]
+        ]
+    )
 
     result_dict = {}
     for _, session_info in json_output["sessions"].items():
-        
-        for profile in session_info["agent_profiles"]:
-            result_dict[profile["ID"]] = {}
+
+        for agent_info in session_info["agents"]:
+            if "ID" not in agent_info["profile_info"]:
+                continue
+
+            result_dict[agent_info["profile_info"]["ID"]] = {
+                "experiment_id": agent_info["experiment_id"],
+                "session_id": agent_info["session_id"],
+                "model_info": agent_info["model_info"],
+                "treatment": agent_info["treatment"],
+            }
 
         for message in session_info["message_history"]:
             if message.get("agent_id", "") == "":
                 continue
             else:
                 role_label = role_labels.intersection(message.keys()).pop()
-                if message.get("prompt_id","") == "" and message.get("var_name","") == "":
+                if (
+                    message.get("prompt_id", "") == ""
+                    and message.get("var_name", "") == ""
+                ):
                     continue
 
-                elif message.get("var_name","") != "":
-                    result_dict[message["agent_id"]][message["var_name"]] = message[role_label]
+                elif message.get("var_name", "") != "":
+                    result_dict[message["agent_id"]][message["var_name"]] = message[
+                        role_label
+                    ]
 
                 else:
-                    result_dict[message["agent_id"]][message["prompt_id"]] = message[role_label]
+                    result_dict[message["agent_id"]][message["prompt_id"]] = message[
+                        role_label
+                    ]
 
-    result_df = pd.DataFrame.from_dict(result_dict, orient='index')
+    result_df = pd.DataFrame.from_dict(result_dict, orient="index")
     result_df.reset_index(drop=False, inplace=True)
-    result_df.rename(columns={"index":"ID"}, inplace=True)
+    result_df.rename(columns={"index": "ID"}, inplace=True)
     result_df.sort_values(by="ID", ascending=True, inplace=True)
-    result_df.to_excel(file_name[:-5] + ".xlsx", index=False)
+    result_df.to_csv(file_name[:-5] + ".csv", index=False)
