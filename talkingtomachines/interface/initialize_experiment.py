@@ -32,6 +32,27 @@ def render_dict_with_template(template_dict: dict, constants_dict: dict) -> dict
             rendered_value = template.render(constants_dict)
             rendered_dict[key] = rendered_value
 
+        elif isinstance(value, list):
+            # Render template for each item in the list
+            rendered_list = []
+            for item in value:
+                if isinstance(item, dict):
+                    # Recursively process nested dictionaries
+                    rendered_list.append(
+                        render_dict_with_template(item, constants_dict)
+                    )
+
+                elif isinstance(item, str):
+                    # Render template for each string value
+                    template = Template(item)
+                    rendered_value = template.render(constants_dict)
+                    rendered_list.append(rendered_value)
+
+                else:
+                    rendered_list.append(item)
+
+            rendered_dict[key] = rendered_list
+
         else:
             rendered_dict[key] = value
 

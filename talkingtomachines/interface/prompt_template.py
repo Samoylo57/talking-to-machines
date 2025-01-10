@@ -6,6 +6,7 @@ import re
 from tqdm import tqdm
 from talkingtomachines.interface.validate_template import *
 from talkingtomachines.interface.initialize_experiment import initialize_experiment
+from talkingtomachines.management.experiment import AItoAIInterviewExperiment
 
 PROMPT_TEMPLATE_SHEETS = [
     "experimental_setting",
@@ -323,6 +324,48 @@ def extract_agent_profiles(template_file_path: str, sheet_name: str) -> dict:
     }
 
 
+def print_experimental_settings(experiment: AItoAIInterviewExperiment) -> None:
+    """Prints the experimental settings for a given AI to AI interview experiment.
+
+    Args:
+        experiment (AItoAIInterviewExperiment): An instance of AItoAIInterviewExperiment containing all the settings and configurations for the experiment.
+    """
+    print(
+        """
+        Experiment Settings for {experiment_id}:
+        {line_separator}
+        Model Info: {model_info}
+        API Endpoint (only valid when using HuggingFace Models): {api_endpoint}
+        Agent Roles: {agent_roles}
+        Number of Agents per Session (Including Interviewer): {num_agents_per_session}
+        Number of Sessions: {num_sessions}
+        Maximum Conversation Length: {max_conversation_length}
+        Treatments: {treatments}
+        Treatment Assignment Strategy: {treatment_assignment_strat}
+        Treatment Assignment Column (Only valid when using manual assignment strategy): {treatment_assignment_column}
+        Agent Assignment Strategy: {agent_assignment_strat}
+        Session Column (Only valid when using manual agent assignment strategy): {session_column}
+        Experiment Prompts: {experiment_prompts}
+
+        """.format(
+            experiment_id=experiment.experiment_id,
+            line_separator="=" * (25 + len(experiment.experiment_id)),
+            model_info=experiment.model_info,
+            api_endpoint=experiment.api_endpoint,
+            agent_roles=experiment.agent_roles,
+            num_agents_per_session=experiment.num_agents_per_session,
+            num_sessions=experiment.num_sessions,
+            max_conversation_length=experiment.max_conversation_length,
+            treatments=experiment.treatments,
+            treatment_assignment_strat=experiment.treatment_assignment_strategy,
+            treatment_assignment_column=experiment.treatment_column,
+            agent_assignment_strat=experiment.agent_assignment_strategy,
+            session_column=experiment.session_column,
+            experiment_prompts=experiment.experiment_prompts,
+        )
+    )
+
+
 def main():
     # Set up command-line argument parsing
     parser = argparse.ArgumentParser(
@@ -386,6 +429,10 @@ def main():
 
     # Initialize experiment based on prompt template
     experiment_list = initialize_experiment(prompt_template_data)
+
+    # Print out experiment settings for user verification
+    for experiment in experiment_list:
+        print_experimental_settings(experiment)
 
     # Ask for user confirmation to run experiment
     user_input = (
