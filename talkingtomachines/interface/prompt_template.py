@@ -2,7 +2,7 @@ import pandas as pd
 import argparse
 import warnings
 import ast
-import re
+import concurrent.futures
 from tqdm import tqdm
 from talkingtomachines.interface.validate_template import *
 from talkingtomachines.interface.initialize_experiment import initialize_experiment
@@ -13,16 +13,17 @@ PROMPT_TEMPLATE_SHEETS = [
     "treatments",
     "agent_roles",
     "prompts_template",
-    "constants",
     "agent_profiles",
+    "constants",
 ]
+SPECIAL_ROLES = ["Facilitator", "Summariser"]
 
 
-def extract_experimental_setting(template_file_path: str, sheet_name: str) -> dict:
-    """Extracts the experimental setting from a specified worksheet in an Excel file.
+def extract_experimental_setting(file_path: str, sheet_name: str) -> dict:
+    """Extracts the experimental setting from a specified worksheet in the prompt template.
 
     Args:
-        template_file_path (str): The file path to the Excel template.
+        file_path (str): The file path to the prompt template.
         sheet_name (str): The name of the worksheet containing the experimental settings.
 
     Returns:
@@ -34,7 +35,7 @@ def extract_experimental_setting(template_file_path: str, sheet_name: str) -> di
         ValueError: If the mandatory fields are not present in the experimental setting worksheet.
     """
     # Read the experimental setting worksheet into a DataFrame
-    experimental_setting_df = pd.read_excel(template_file_path, sheet_name=sheet_name)
+    experimental_setting_df = pd.read_excel(file_path, sheet_name=sheet_name)
 
     # Validate the presence of mandatory fields in the experimental setting worksheet
     validate_experimental_settings_sheet(experimental_setting_df)
@@ -47,12 +48,12 @@ def extract_experimental_setting(template_file_path: str, sheet_name: str) -> di
     return experimental_setting_dict
 
 
-def extract_treatments(template_file_path: str, sheet_name: str) -> dict:
-    """Extracts treatment data from an Excel worksheet and returns it as a dictionary.
+def extract_treatments(file_path: str, sheet_name: str) -> dict:
+    """Extracts treatment information from the prompt template and returns it as a dictionary.
 
     Args:
-        template_file_path (str): The file path to the Excel template.
-        sheet_name (str): The name of the sheet within the Excel file to extract data from.
+        file_path (str): The file path to the prompt template.
+        sheet_name (str): The name of the sheet within the prompt template file to extract data from.
 
     Returns:
         dict: A dictionary containing the treatment data with the first column as keys and the second column as values.
@@ -61,7 +62,7 @@ def extract_treatments(template_file_path: str, sheet_name: str) -> dict:
         ValueError: If mandatory fields are not present in the treatments worksheet.
     """
     # Read the treatment worksheet into a DataFrame
-    treatments_df = pd.read_excel(template_file_path, sheet_name=sheet_name)
+    treatments_df = pd.read_excel(file_path, sheet_name=sheet_name)
 
     # Validate the presence of mandatory fields in the treatment worksheet
     validate_treatments_sheet(treatments_df)
@@ -74,12 +75,12 @@ def extract_treatments(template_file_path: str, sheet_name: str) -> dict:
     return {"treatments": treatments_dict}
 
 
-def extract_agent_roles(template_file_path: str, sheet_name: str) -> dict:
-    """Extracts agent roles from a specified Excel worksheet and returns them as a dictionary.
+def extract_agent_roles(file_path: str, sheet_name: str) -> dict:
+    """Extracts agent roles from a specified worksheet in the prompt template and return them as a dictionary.
 
     Args:
-        template_file_path (str): The file path to the Excel template.
-        sheet_name (str): The name of the sheet within the Excel file that contains the agent roles.
+        file_path (str): The file path to the prompt template.
+        sheet_name (str): The name of the sheet within the prompt template that contains the agent roles.
 
     Returns:
         dict: A dictionary with a single key "agent_roles" mapping to another dictionary where the keys are the
@@ -90,7 +91,7 @@ def extract_agent_roles(template_file_path: str, sheet_name: str) -> dict:
         ValueError: If mandatory fields are not present in the agent roles worksheet.
     """
     # Read the agent role worksheet into a DataFrame
-    agent_roles_df = pd.read_excel(template_file_path, sheet_name=sheet_name)
+    agent_roles_df = pd.read_excel(file_path, sheet_name=sheet_name)
 
     # Validate the presence of mandatory fields in the treatment worksheet
     validate_agent_roles_sheet(agent_roles_df)
@@ -103,119 +104,64 @@ def extract_agent_roles(template_file_path: str, sheet_name: str) -> dict:
     return {"agent_roles": agent_roles_dict}
 
 
-def generate_regex_for_response_options(response_options: str) -> list:
-    """Generates a list of regex patterns based on the provided response options.
+def parse_llm_text_column(llm_text: str, agent_list: list, task_id: str) -> dict:
+    """Parses the llm_text column.
 
-    This function takes a string of response options separated by semicolons and
-    generates corresponding regex patterns. The response options can be either
-    categorical values or numerical ranges. Numerical ranges are specified using
-    a colon (e.g., "1:10" for values between 1 and 10).
+    If llm_text is a plain string (i.e. not a dictionary literal), this function
+    creates a dictionary where the keys are the agents in agent_list (excluding those in SPECIAL_ROLES)
+    and the value is the plain string.
 
-    Args:
-        response_options (str): A string containing response options separated by semicolons.
-                                Numerical ranges can be specified using a colon.
-
-    Returns:
-        list: A list of regex patterns corresponding to the provided response options.
-
-    Raises:
-        ValueError: If a numerical range is specified incorrectly.
-    """
-    if pd.isnull(response_options):
-        return response_options
-
-    options = response_options.split(";")
-    regex_patterns = []
-
-    for option in options:
-        option = option.strip()
-
-        if ":" in option:
-            start, end = option.split(":")
-            start = start.strip()
-            end = end.strip()
-
-            try:
-                if start == "":
-                    start = float("-inf")
-                else:
-                    start = int(start)
-
-                if end == "":
-                    end = float("inf")
-                else:
-                    end = int(end)
-
-                # Create the regex pattern based on the bounds
-                if start == float("-inf") and end == float(
-                    "inf"
-                ):  # No upper or lower bound
-                    condition = r"\d+"
-                elif start == float("-inf"):  # No lower bound, only upper bound
-                    condition = rf"\b([0-9]|[1-9][0-9]{{0,{len(str(end)) - 1}}})\b"  # Matches up to 'end'
-                elif end == float("inf"):  # No upper bound, only lower bound
-                    condition = (
-                        rf"\b({start}[0-9]*)\b"  # Matches 'start' and numbers after it
-                    )
-                else:  # Both upper and lower bounds defined
-                    if start == end:
-                        condition = rf"\b{start}\b"  # Exact match if start == end
-                    else:
-                        # Regex pattern for inclusive range from 'start' to 'end'
-                        condition = rf"\b({start}|{end}|\d{{1,{max(len(str(start)), len(str(end)))}}})\b"
-
-                regex_patterns.append(condition)
-
-            except ValueError:
-                warnings.warn(
-                    f"The following prompt {option} contains ':' indicating a range of numerical values; however, it is not a valid range. This response option will be treated as a categorical option."
-                )
-                regex_patterns.append(rf"\b{re.escape(option.lower())}\b")
-        else:
-            # regex_patterns.append(re.escape(option.lower()))
-            regex_patterns.append(rf"\b{re.escape(option.lower())}\b")
-
-    combined_regex = "|".join(regex_patterns)
-    return combined_regex
-
-
-def insert_response_options(row: pd.Series) -> str:
-    """Inserts response options into a prompt string if a placeholder is present.
-
-    This function checks if the placeholder "{response_options}" is present in the
-    "prompt" field of the given pandas Series row. If the placeholder is found, it
-    replaces it with a formatted string of response options separated by commas and
-    an "or" before the last option. The response options are expected to be in the
-    "response_options" field of the row, separated by semicolons.
+    Otherwise, if llm_text is a string representation of a dictionary, it is parsed and then
+    validated such that the parsed dictionary contains all of the required agent keys.
+    If any are missing, a ValueError is raised.
 
     Args:
-        row (pd.Series): A pandas Series containing at least "prompt" and
-                         "response_options" fields.
+        llm_text (str): The text to parse.
+        agent_list (list): A list of agent names.
+        task_id (str): The task ID associated with the llm_text.
 
     Returns:
-        str: The prompt string with the response options inserted, if the placeholder
-             was present. Otherwise, returns the original prompt string.
+        dict: A dictionary mapping agent names to the llm_text.
     """
-    if "{response_options}" in row["experiment_prompt"]:
-        options = row["response_options"].split(";")
-        return row["experiment_prompt"].replace(
-            "{response_options}",
-            f'{", ".join([f"{repr(option.strip())}" for option in options[:-1]])} or {repr(options[-1].strip())}',
-        )
+    # Create list of user-defined agents, excluding the special ones
+    user_defined_agents = [agent for agent in agent_list if agent not in SPECIAL_ROLES]
+    stripped_text = llm_text.strip()
 
+    # If the text starts with "{" and ends with "}", assume it's a dictionary literal.
+    if stripped_text.startswith("{") and stripped_text.endswith("}"):
+        try:
+            agent_prompt_dict = ast.literal_eval(llm_text)
+        except (ValueError, SyntaxError) as e:
+            warnings.warn(
+                f"Error parsing llm_text as dictionary: {e}. The prompt will be treated as a plain string and assigned to all user-defined agents."
+            )
+            agent_prompt_dict = {agent: llm_text for agent in user_defined_agents}
+
+        # Check if all allowed agents are keys in the parsed dictionary.
+        missing_agents = [
+            agent for agent in user_defined_agents if agent not in agent_prompt_dict
+        ]
+        if missing_agents:
+            raise ValueError(
+                f"The parsed string from llm_text column (task_id: {task_id}) is missing the following agents: {missing_agents}"
+            )
+        return agent_prompt_dict
+
+    # Otherwise, it's a plain string: build a dictionary mapping each user-defined agent to that string.
     else:
-        return row["experiment_prompt"]
+        return {agent: llm_text for agent in user_defined_agents}
 
 
-def extract_prompts(template_file_path: str, sheet_name: str) -> dict:
-    """Extracts prompts from an Excel worksheet and returns them as a dictionary.
+def extract_prompts(file_path: str, sheet_name: str, agent_list: list) -> dict:
+    """Extracts prompts from a specified worksheet in the prompt template and returns them as a dictionary.
 
-    This function reads a specified worksheet from an Excel file, validates the presence
+    This function reads a specified worksheet from the prompt template file, validates the presence
     of mandatory fields, processes the prompts, and returns them in a structured format.
 
     Args:
-        template_file_path (str): The file path to the Excel template file.
-        sheet_name (str): The name of the worksheet to read from the Excel file.
+        file_path (str): The file path to the prompt template file.
+        sheet_name (str): The name of the worksheet to read from the prompt template file.
+        agent_list (list): A list of agent roles to be used in the experiment.
 
     Returns:
         dict: A dictionary containing a list of prompts. Each prompt is represented as a dictionary
@@ -225,43 +171,61 @@ def extract_prompts(template_file_path: str, sheet_name: str) -> dict:
         ValueError: If mandatory fields are not present in the prompts_template worksheet.
     """
     # Read the prompt template worksheet into a DataFrame
-    prompts_df = pd.read_excel(template_file_path, sheet_name=sheet_name)
+    prompts_df = pd.read_excel(file_path, sheet_name=sheet_name)
 
     # Validate the presence of mandatory fields in the prompt template worksheet
     validate_prompts_sheet(prompts_df)
 
-    # Extract the final version of the prompts. First take from "text_adapted", if not take from "text", else ""
-    prompts_df["experiment_prompt"] = prompts_df["text_adapted"]
-    prompts_df["experiment_prompt"] = prompts_df["experiment_prompt"].fillna(
-        prompts_df["text"]
-    )
-    prompts_df["experiment_prompt"] = prompts_df["experiment_prompt"].fillna("")
+    # Convert the prompts to a list of dictionaries
+    prompts_list = prompts_df[
+        [
+            "task_id",
+            "type",
+            "task_order",
+            "llm_text",
+            "var_name",
+            "var_type",
+            "response_options",
+            "randomize_response_order",
+            "validate_response",
+            "generate_speculation_score",
+        ]
+    ].to_dict(orient="records")
 
-    # Insert response options into prompts
-    prompts_df["experiment_prompt"] = prompts_df.apply(insert_response_options, axis=1)
+    # Parse llm_text column from string format to appropriate Python format
+    for prompt_dict in prompts_list:
+        prompt_dict["llm_text"] = parse_llm_text_column(
+            llm_text=prompt_dict["llm_text"],
+            agent_list=agent_list,
+            task_id=prompt_dict["task_id"],
+        )
 
-    # Parse response options to regex format
-    prompts_df["response_options"] = prompts_df["response_options"].apply(
-        generate_regex_for_response_options
-    )
+    # Parse response_options column from string format to appropriate Python format
+    for prompt_dict in prompts_list:
+        if (
+            prompt_dict["type"] == "context"
+        ):  # No responses are expected for context prompts
+            continue
 
-    # Drop the irrelevant columns
-    prompts_df.drop(columns=["is_adapted", "text", "text_adapted"], inplace=True)
+        try:
+            prompt_dict["response_options"] = ast.literal_eval(
+                prompt_dict["response_options"]
+            )
+        except (ValueError, SyntaxError):
+            # If the response options are not in a valid format, treat them as a string
+            warnings.warn(
+                f"The response_options field for task_id '{prompt_dict.get('task_id', 'Unknown ID')}' is not a valid Python literal expression and will be treated as a string: {prompt_dict['response_options']}"
+            )
+            continue
 
-    # Convert from dataframe to a list of dictionary
-    prompt_list = []
-    for _, row in prompts_df.iterrows():
-        row_dict = {key: value for key, value in row.items() if not pd.isnull(value)}
-        prompt_list.append(row_dict)
-
-    return {"experiment_prompts": prompt_list}
+    return {"experiment_prompts": prompts_list}
 
 
-def extract_constants(template_file_path: str, sheet_name: str) -> dict:
-    """Extracts constants from a specified worksheet in an Excel file and returns them as a dictionary.
+def extract_constants(file_path: str, sheet_name: str) -> dict:
+    """Extracts constants from a specified worksheet in the prompt template and returns them as a dictionary.
 
     Args:
-        template_file_path (str): The file path to the Excel template.
+        file_path (str): The file path to the prompt template.
         sheet_name (str): The name of the worksheet containing the constants.
 
     Returns:
@@ -273,7 +237,7 @@ def extract_constants(template_file_path: str, sheet_name: str) -> dict:
         ValueError: If mandatory fields are not present in the constants worksheet.
     """
     # Read the constants worksheet into a DataFrame
-    constants_df = pd.read_excel(template_file_path, sheet_name=sheet_name)
+    constants_df = pd.read_excel(file_path, sheet_name=sheet_name)
 
     # Validate the presence of mandatory fields in the constants worksheet
     validate_constants_sheet(constants_df)
@@ -293,12 +257,12 @@ def extract_constants(template_file_path: str, sheet_name: str) -> dict:
     return {"constants": constants_dict}
 
 
-def extract_agent_profiles(template_file_path: str, sheet_name: str) -> dict:
-    """Extracts agent profiles from an Excel sheet.
+def extract_agent_profiles(file_path: str, sheet_name: str) -> dict:
+    """Extracts agent profiles from a specified worksheet from the prompt template.
 
     Args:
-        template_file_path (str): The file path to the Excel template.
-        sheet_name (str): The name of the sheet to read from the Excel file.
+        file_path (str): The file path to the prompt template.
+        sheet_name (str): The name of the sheet to read from the prompt template.
 
     Returns:
         dict: A dictionary containing:
@@ -309,7 +273,7 @@ def extract_agent_profiles(template_file_path: str, sheet_name: str) -> dict:
         ValueError: If mandatory fields are not present in the agent_profiles worksheet.
     """
     # Read the specified sheet into a DataFrame
-    agent_profiles_df = pd.read_excel(template_file_path, sheet_name=sheet_name)
+    agent_profiles_df = pd.read_excel(file_path, sheet_name=sheet_name)
 
     # Extract the first row and convert them to a dictionary
     agent_profiles_mapping = agent_profiles_df.iloc[0].to_dict()
@@ -341,10 +305,13 @@ def print_experimental_settings(experiment: AItoAIInterviewExperiment) -> None:
         Number of Sessions: {num_sessions}
         Maximum Conversation Length: {max_conversation_length}
         Treatments: {treatments}
-        Treatment Assignment Strategy: {treatment_assignment_strat}
-        Treatment Assignment Column (Only valid when using manual assignment strategy): {treatment_assignment_column}
-        Agent Assignment Strategy: {agent_assignment_strat}
-        Session Column (Only valid when using manual agent assignment strategy): {session_column}
+        Treatment Assignment Strategy: {treatment_assignment_strategy}
+        Treatment Column (Only valid when using manual assignment strategy): {treatment_column}
+        Session Assignment Strategy: {session_assignment_strategy}
+        Session Column (Only valid when using manual assignment strategy): {session_column}
+        Role Assignment Strategy: {role_assignment_strategy}
+        Role Column (Only valid when using manual assignment strategy): {role_column}
+        Random Seed: {random_seed}
         Experiment Prompts: {experiment_prompts}
 
         """.format(
@@ -357,12 +324,33 @@ def print_experimental_settings(experiment: AItoAIInterviewExperiment) -> None:
             num_sessions=experiment.num_sessions,
             max_conversation_length=experiment.max_conversation_length,
             treatments=experiment.treatments,
-            treatment_assignment_strat=experiment.treatment_assignment_strategy,
-            treatment_assignment_column=experiment.treatment_column,
-            agent_assignment_strat=experiment.agent_assignment_strategy,
+            treatment_assignment_strategy=experiment.treatment_assignment_strategy,
+            treatment_column=experiment.treatment_column,
+            session_assignment_strategy=experiment.session_assignment_strategy,
             session_column=experiment.session_column,
+            role_assignment_strategy=experiment.role_assignment_strategy,
+            role_column=experiment.role_column,
+            random_seed=experiment.random_seed,
             experiment_prompts=experiment.experiment_prompts,
         )
+    )
+
+
+def run_experiment_wrapper(args: tuple) -> None:
+    """Wrapper function to execute an experiment with the provided arguments.
+
+    Args:
+        args (tuple): A tuple containing the following elements:
+            - experiment: An object with a `run_experiment` method to execute the experiment.
+            - test_mode (bool): A flag indicating whether the experiment should run in test mode.
+            - version (str): The version identifier for the experiment.
+
+    Returns:
+        None
+    """
+    experiment, test_mode, version = args
+    experiment.run_experiment(
+        test_mode=test_mode, version=version, save_results_as_csv=True
     )
 
 
@@ -372,55 +360,75 @@ def main():
         description="Read the prompt template provided by the user"
     )
     parser.add_argument(
-        "template_file_path", type=str, help="Path to the prompt template"
+        "prompt_template_file_path",
+        type=str,
+        default="",
+        help="Path to the prompt template file",
     )
     parser.add_argument(
         "test_mode",
         type=str,
+        default="",
         help="Boolean indicating whether the experiment will be run in test mode",
     )
     args = parser.parse_args()
+    prompt_template_file_path = args.prompt_template_file_path
+    test_mode = args.test_mode
 
     # Validate the provided directory path to the prompt template
-    validate_prompt_template_path(args.template_file_path)
+    validate_prompt_template_path(file_path=prompt_template_file_path)
 
     # Validate the test mode
-    args.test_mode = validate_test_mode(args.test_mode)
+    test_mode = validate_test_mode(test_mode=test_mode)
 
     # Read the prompt template in Excel format
-    prompt_template = pd.ExcelFile(args.template_file_path)
+    prompt_template = pd.ExcelFile(prompt_template_file_path)
 
     # Validate the required sheets in the prompt template
-    validate_prompt_template_sheets(prompt_template, PROMPT_TEMPLATE_SHEETS)
+    validate_prompt_template_sheets(
+        excel_file=prompt_template, required_sheet_list=PROMPT_TEMPLATE_SHEETS
+    )
 
     # Dictionary to store data from each worksheet
-    prompt_template_data = {}
+    prompt_template_dict = {}
 
     # Iterate through each worksheet
     for sheet_name in prompt_template.sheet_names:
         if sheet_name == "experimental_setting":
-            prompt_template_data.update(
-                extract_experimental_setting(args.template_file_path, sheet_name)
+            prompt_template_dict.update(
+                extract_experimental_setting(
+                    file_path=prompt_template_file_path, sheet_name=sheet_name
+                )
             )
         elif sheet_name == "treatments":
-            prompt_template_data.update(
-                extract_treatments(args.template_file_path, sheet_name)
+            prompt_template_dict.update(
+                extract_treatments(
+                    file_path=prompt_template_file_path, sheet_name=sheet_name
+                )
             )
         elif sheet_name == "agent_roles":
-            prompt_template_data.update(
-                extract_agent_roles(args.template_file_path, sheet_name)
+            prompt_template_dict.update(
+                extract_agent_roles(
+                    file_path=prompt_template_file_path, sheet_name=sheet_name
+                )
             )
         elif sheet_name == "prompts_template":
-            prompt_template_data.update(
-                extract_prompts(args.template_file_path, sheet_name)
-            )
-        elif sheet_name == "constants":
-            prompt_template_data.update(
-                extract_constants(args.template_file_path, sheet_name)
+            prompt_template_dict.update(
+                extract_prompts(
+                    file_path=prompt_template_file_path, sheet_name=sheet_name
+                )
             )
         elif sheet_name == "agent_profiles":
-            prompt_template_data.update(
-                extract_agent_profiles(args.template_file_path, sheet_name)
+            prompt_template_dict.update(
+                extract_agent_profiles(
+                    file_path=prompt_template_file_path, sheet_name=sheet_name
+                )
+            )
+        elif sheet_name == "constants":
+            prompt_template_dict.update(
+                extract_constants(
+                    file_path=prompt_template_file_path, sheet_name=sheet_name
+                )
             )
         else:
             warnings.warn(
@@ -428,7 +436,7 @@ def main():
             )
 
     # Initialize experiment based on prompt template
-    experiment_list = initialize_experiment(prompt_template_data)
+    experiment_list = initialize_experiment(prompt_template_dict=prompt_template_dict)
 
     # Print out experiment settings for user verification
     for experiment in experiment_list:
@@ -444,11 +452,24 @@ def main():
     )
     if user_input == "y":
         print("Experiment has started.")
-        for idx, experiment in tqdm(enumerate(experiment_list)):
-            experiment.run_experiment(
-                test_mode=args.test_mode, version=idx + 1, save_results_as_csv=True
-            )
+        # Prepare a list of arguments for each experiment
+        experiment_args = [
+            (experiment, test_mode, idx + 1)
+            for idx, experiment in enumerate(experiment_list)
+        ]
+
+        # Run experiments in parallel using ProcessPoolExecutor
+        with concurrent.futures.ProcessPoolExecutor() as executor:
+            # Submit all experiments
+            futures = [
+                executor.submit(run_experiment_wrapper, arg) for arg in experiment_args
+            ]
+
+            # Update progress bar as each experiment completes
+            for _ in tqdm(concurrent.futures.as_completed(futures), total=len(futures)):
+                pass
         print("Experiment is completed successfully.")
+
     else:
         print("Experiment is terminated by the user.")
 
