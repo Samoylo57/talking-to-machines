@@ -8,7 +8,7 @@ def generate_profile_prompt(profile_info: dict) -> str:
         str: The formatted profile information as a prompt.
     """
     try:
-        profile_prompt = "Your demographic profile: "
+        profile_prompt = "Your demographic profile:\n"
         counter = 1
         for question, response in profile_info.items():
             if question == "ID":
@@ -31,7 +31,7 @@ def generate_conversational_agent_system_message(
     role_description: str,
     profile_prompt: str,
 ) -> str:
-    """Constructs system message for conversational agents by combining experiment_context, treatment, role description, and profile_prompt.
+    """Constructs system message for conversational agents by combining experiment_context, treatment, profile_prompt, role description.
 
     Args:
         experiment_context (str): The context of the experiment.
@@ -43,7 +43,7 @@ def generate_conversational_agent_system_message(
         str: The constructed conversational system message.
     """
     return (
-        f"{experiment_context}\n\n{role_description}\n\n{profile_prompt}\n\n{treatment}"
+        f"{experiment_context}\n\n{treatment}\n\n{profile_prompt}\n\n{role_description}"
     )
 
 

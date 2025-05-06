@@ -10,6 +10,21 @@ from talkingtomachines.config import DevelopmentConfig
 
 ProfileInfo = dict[str, Any]
 NUM_RETRY = 3
+OPENAI_MODELS = [
+    "gpt-4.5-preview",
+    "o3",
+    "o4-mini",
+    "o1-pro",
+    "o1",
+    "gpt-4.1",
+    "gpt-4.1-mini",
+    "gpt-4.1-nano",
+    "gpt-4o",
+    "gpt-4o-mini",
+    "gpt-4-turbo",
+    "gpt-4",
+    "gpt-3.5-turbo",
+]
 
 
 class SyntheticAgent:
@@ -18,7 +33,7 @@ class SyntheticAgent:
     Args:
         experiment_id (str): The ID of the experiment.
         experiment_context (str): The context of the experiment.
-        session_id (int): The ID of the session.
+        session_id (Any): The ID of the session.
         profile_info (ProfileInfo): The profile information of the user.
         model_info (str): The information about the model used by the agent.
         api_endpoint (str, optional): API endpoint to the LLM model if the model is hosted externally.
@@ -29,10 +44,11 @@ class SyntheticAgent:
     Attributes:
         experiment_id (str): The ID of the experiment.
         experiment_context (str): The context of the experiment.
-        session_id (int): The ID of the session.
+        session_id (Any): The ID of the session.
         profile_info (ProfileInfo): The profile information of the user.
         profile_prompt (str): A prompt string containing the profile information of the user.
         model_info (str): The information about the model used by the agent.
+        api_endpoint (str): API endpoint to the LLM model if the model is hosted externally.
         llm_client (OpenAI): The LLM client.
     """
 
@@ -40,10 +56,10 @@ class SyntheticAgent:
         self,
         experiment_id: str,
         experiment_context: str,
-        session_id: int,
+        session_id: Any,
         profile_info: ProfileInfo,
         model_info: str,
-        api_endpoint: str,
+        api_endpoint: str = "",
         profile_prompt_generator: Callable[
             [ProfileInfo], str
         ] = generate_profile_prompt,
@@ -54,17 +70,11 @@ class SyntheticAgent:
         self.profile_info = profile_info
         self.profile_prompt = profile_prompt_generator(profile_info)
         self.model_info = model_info
-        self.llm_client = self.initialise_llm_client(self.model_info, api_endpoint)
+        self.api_endpoint = api_endpoint
+        self.llm_client = self.initialise_llm_client()
 
-    def initialise_llm_client(self, model_info: str, api_endpoint: str = ""):
-        """Initialise a language model client based on the provided model information.
-
-        Args:
-            model_info (str): The identifier for the language model to be used.
-                      Supported values are "gpt-4o", "gpt-4o-mini", "gpt-4-turbo",
-                      "gpt-4", "gpt-3.5-turbo", and "hf-inference".
-            api_endpoint (str, optional): The API endpoint to be used for the "hf-inference" model.
-                          Defaults to an empty string.
+    def initialise_llm_client(self):
+        """Initialise a language model client based on the provided model information and API endpoint.
 
         Returns:
             OpenAI: An instance of the OpenAI client configured with the appropriate API key
@@ -73,20 +83,16 @@ class SyntheticAgent:
         Raises:
             ValueError: If the provided model_info is not supported.
         """
-        if model_info in [
-            "gpt-4o",
-            "gpt-4o-mini",
-            "gpt-4-turbo",
-            "gpt-4",
-            "gpt-3.5-turbo",
-        ]:
+        if self.model_info in OPENAI_MODELS:
             return OpenAI(api_key=DevelopmentConfig.OPENAI_API_KEY)
 
-        elif model_info in ["hf-inference"]:
-            return OpenAI(base_url=api_endpoint, api_key=DevelopmentConfig.HF_TOKEN)
+        elif self.model_info in ["hf-inference"]:
+            return OpenAI(
+                base_url=self.api_endpoint, api_key=DevelopmentConfig.HF_TOKEN
+            )
 
         else:
-            raise ValueError(f"{model_info} is not supported.")
+            raise ValueError(f"{self.model_info} is not supported.")
 
     def to_dict(self) -> dict[str, Any]:
         """Converts the SyntheticAgent object to a dictionary.
@@ -101,6 +107,7 @@ class SyntheticAgent:
             "profile_info": self.profile_info,
             "profile_prompt": self.profile_prompt,
             "model_info": self.model_info,
+            "api_endpoint": self.api_endpoint,
         }
 
     def respond(self) -> str:
@@ -123,12 +130,12 @@ class ConversationalSyntheticAgent(SyntheticAgent):
     Args:
         experiment_id (str): The ID of the experiment.
         experiment_context (str): The context of the experiment.
-        session_id (int): The ID of the session.
+        session_id (Any): The ID of the session.
         profile_info (ProfileInfo): The profile information of the user.
-        role (str): The name of the role assigned to the agent.
-        role_description (str): The description of the role assigned to the agent.
         model_info (str): The information about the model used by the agent.
         api_endpoint (str, optional): API endpoint to the LLM model if the model is hosted externally.
+        role (str): The name of the role assigned to the agent.
+        role_description (str): The description of the role assigned to the agent.
         treatment (str): The treatment assigned to the session.
         profile_prompt_generator (Callable[[ProfileInfo], str], optional):
             A function that generates a profile prompt based on the profile information.
@@ -137,15 +144,16 @@ class ConversationalSyntheticAgent(SyntheticAgent):
     Attributes:
         experiment_id (str): The ID of the experiment.
         experiment_context (str): The context of the experiment.
-        session_id (int): The ID of the session.
+        session_id (Any): The ID of the session.
         profile_info (ProfileInfo): The profile information of the user.
         profile_prompt (str): A prompt string containing the profile information of the user.
         model_info (str): The information about the model used by the agent.
-        llm_client (OpenAI): The LLM client.
+        api_endpoint (str): API endpoint to the LLM model if the model is hosted externally.
         role (str): The name of the role assigned to the agent.
         role_description (str): The description of the role assigned to the agent.
         treatment (str): The treatment assigned to the session.
         system_message (str): The system message generated for the conversation.
+        llm_client (OpenAI): The LLM client.
         message_history (List[dict]): The history of the conversation with the synthetic agent.
     """
 
@@ -153,12 +161,12 @@ class ConversationalSyntheticAgent(SyntheticAgent):
         self,
         experiment_id: str,
         experiment_context: str,
-        session_id: int,
+        session_id: Any,
         profile_info: ProfileInfo,
-        role: str,
-        role_description: str,
         model_info: str,
         api_endpoint: str,
+        role: str,
+        role_description: str,
         treatment: str,
         profile_prompt_generator: Callable[
             [ProfileInfo], str
@@ -199,6 +207,7 @@ class ConversationalSyntheticAgent(SyntheticAgent):
             "profile_info": self.profile_info,
             "profile_prompt": self.profile_prompt,
             "model_info": self.model_info,
+            "api_endpoint": self.api_endpoint,
             "role": self.role,
             "role_description": self.role_description,
             "treatment": self.treatment,
@@ -218,44 +227,68 @@ class ConversationalSyntheticAgent(SyntheticAgent):
         """
         self.message_history.append({"role": role, "content": message})
 
-    def validate_response(self, validation_regex_pattern: str):
-        """
-        Validates the agent's response against the given regex pattern.
+    def validate_response(self, response: str, response_options: Any) -> bool:
+        """Validates whether a given response contains any of the valid response options as whole words.
 
         Args:
-            validation_regex_pattern (str): The compiled regex pattern to validate against.
+            response (str): The response string to validate.
+            response_options (Any): The valid response options. Can be a range, a list, or a single value.
 
         Returns:
-            str: The validated response or the last response after 3 attempts.
+            bool: True if the response contains any of the valid options as whole words, False otherwise.
         """
-        regex_pattern = re.compile(validation_regex_pattern, re.IGNORECASE)
-        for _ in range(NUM_RETRY):
-            response = query_llm(
-                llm_client=self.llm_client,
-                model_info=self.model_info,
-                message_history=self.message_history,
-            )
-            match = regex_pattern.search(response)
-            if match:
-                return match.group(0).lower().title()
-        return response
+        # Build a list of valid options as strings.
+        if isinstance(response_options, range):
+            options = [str(opt) for opt in response_options]
+        elif isinstance(response_options, list):
+            options = [str(opt) for opt in response_options]
+        else:
+            options = [str(response_options)]
 
-    def respond(self, question: str, validation: str = None) -> str:
+        # Check if any valid option appears as a whole word inside the response.
+        for opt in options:
+            pattern = r"\b" + re.escape(opt) + r"\b"
+            if re.search(pattern, response):
+                return True
+        return False
+
+    def respond(
+        self,
+        question: str,
+        validate_response: str = "0",
+        response_options: Any = [],
+        generate_speculation_score: str = "0",
+    ) -> str:
         """Generate a response to a question posed to the synthetic agent.
 
         Args:
             question (str): A question or prompt to which the agent should respond.
-            validation (str): The compiled regex pattern to validate against.
+            validate_response (str): Either "0" or "1" to indicate whether to perform response validation or not
+            response_options (Any): A list of options to choose from for the response.
+            generate_speculation_score (str): Either "0" or "1" to indicate whether to generate a speculation score or not.
 
         Returns:
             str: The response generated by the synthetic agent.
         """
         try:
+            if generate_speculation_score == "1":
+                speculation_instruction = "\n\nAt the end of your response, please include a speculation score from 0 (not speculative at all) to 100 (fully speculative) in the format:\nSpeculation Score: XXX"
+                question += speculation_instruction
             self.update_message_history(message=question, role="user")
 
-            if validation:
-                response = self.validate_response(validation)
-            else:
+            if validate_response == "1":  # Validate response based on response_options
+                for _ in range(NUM_RETRY):
+                    response = query_llm(
+                        llm_client=self.llm_client,
+                        model_info=self.model_info,
+                        message_history=self.message_history,
+                    )
+                    if validate_response(
+                        response=response, response_options=response_options
+                    ):
+                        break
+
+            else:  # Skip validation
                 response = query_llm(
                     llm_client=self.llm_client,
                     model_info=self.model_info,

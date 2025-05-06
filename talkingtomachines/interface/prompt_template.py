@@ -12,11 +12,16 @@ PROMPT_TEMPLATE_SHEETS = [
     "experimental_setting",
     "treatments",
     "agent_roles",
-    "prompts_template",
+    "interview_prompts",
     "agent_profiles",
     "constants",
 ]
-SPECIAL_ROLES = ["Facilitator", "Summariser"]
+SPECIAL_ROLES = ["Facilitator", "Summarizer"]
+SUPPORTED_PROMPT_TYPES = [
+    "context",
+    "question",
+    "discussion",
+]
 
 
 def extract_experimental_setting(file_path: str, sheet_name: str) -> dict:
@@ -72,6 +77,17 @@ def extract_treatments(file_path: str, sheet_name: str) -> dict:
         treatments_df.columns[1]
     ]
 
+    # if the treatment is a string representation of a list, convert it to an actual list
+    for label, treatment in treatments_dict.items():
+        if treatment.startswith("[") and treatment.endswith("]"):
+            try:
+                treatments_dict[label] = ast.literal_eval(treatment)
+            except (ValueError, SyntaxError) as e:
+                warnings.warn(
+                    f"Error parsing treatment as list: {e}. The treatment will be treated as a plain string."
+                )
+                pass
+
     return {"treatments": treatments_dict}
 
 
@@ -104,52 +120,54 @@ def extract_agent_roles(file_path: str, sheet_name: str) -> dict:
     return {"agent_roles": agent_roles_dict}
 
 
-def parse_llm_text_column(llm_text: str, agent_list: list, task_id: str) -> dict:
-    """Parses the llm_text column.
+def parse_text_field(
+    text_field: str, agent_list: list, task_id: str, prompt_type: str
+) -> dict:
+    """Parses the text for the llm_text and response_options fields, converting them into Python objects and assigning to agent roles.
 
-    If llm_text is a plain string (i.e. not a dictionary literal), this function
+    If text_field is a plain string (i.e. not a dictionary literal), this function
     creates a dictionary where the keys are the agents in agent_list (excluding those in SPECIAL_ROLES)
     and the value is the plain string.
 
-    Otherwise, if llm_text is a string representation of a dictionary, it is parsed and then
-    validated such that the parsed dictionary contains all of the required agent keys.
-    If any are missing, a ValueError is raised.
+    Otherwise, if text_field is a string representation of a dictionary, it is parsed as a Python dictionary.
 
     Args:
-        llm_text (str): The text to parse.
+        text_field (str): The text field to parse.
         agent_list (list): A list of agent names.
         task_id (str): The task ID associated with the llm_text.
+        prompt_type (str): The type of the prompt.
 
     Returns:
         dict: A dictionary mapping agent names to the llm_text.
     """
     # Create list of user-defined agents, excluding the special ones
     user_defined_agents = [agent for agent in agent_list if agent not in SPECIAL_ROLES]
-    stripped_text = llm_text.strip()
+    stripped_text = text_field.strip()
 
-    # If the text starts with "{" and ends with "}", assume it's a dictionary literal.
-    if stripped_text.startswith("{") and stripped_text.endswith("}"):
-        try:
-            agent_prompt_dict = ast.literal_eval(llm_text)
-        except (ValueError, SyntaxError) as e:
-            warnings.warn(
-                f"Error parsing llm_text as dictionary: {e}. The prompt will be treated as a plain string and assigned to all user-defined agents."
-            )
-            agent_prompt_dict = {agent: llm_text for agent in user_defined_agents}
+    if prompt_type == "question":
+        # If the text starts with "{" and ends with "}", assume it's a dictionary literal.
+        if stripped_text.startswith("{") and stripped_text.endswith("}"):
+            try:
+                agent_prompt_dict = ast.literal_eval(text_field)
+            except (ValueError, SyntaxError) as e:
+                warnings.warn(
+                    f"Error parsing text field ({text_field}) in Task ID {task_id} as dictionary: {e}. The prompt will be treated as a plain string and assigned to all user-defined agents."
+                )
+                agent_prompt_dict = {agent: text_field for agent in user_defined_agents}
 
-        # Check if all allowed agents are keys in the parsed dictionary.
-        missing_agents = [
-            agent for agent in user_defined_agents if agent not in agent_prompt_dict
-        ]
-        if missing_agents:
-            raise ValueError(
-                f"The parsed string from llm_text column (task_id: {task_id}) is missing the following agents: {missing_agents}"
-            )
-        return agent_prompt_dict
+            return agent_prompt_dict
 
-    # Otherwise, it's a plain string: build a dictionary mapping each user-defined agent to that string.
+        # Otherwise, it's a plain string: build a dictionary mapping each user-defined agent to that string.
+        else:
+            return {agent: text_field for agent in user_defined_agents}
+
+    elif prompt_type in ["context", "discussion"]:
+        return {"Facilitator": text_field}
+
     else:
-        return {agent: llm_text for agent in user_defined_agents}
+        raise ValueError(
+            f"Invalid prompt type: {prompt_type} in Task ID {task_id}: Supported prompt types include: {SUPPORTED_PROMPT_TYPES}"
+        )
 
 
 def extract_prompts(file_path: str, sheet_name: str, agent_list: list) -> dict:
@@ -194,31 +212,21 @@ def extract_prompts(file_path: str, sheet_name: str, agent_list: list) -> dict:
 
     # Parse llm_text column from string format to appropriate Python format
     for prompt_dict in prompts_list:
-        prompt_dict["llm_text"] = parse_llm_text_column(
-            llm_text=prompt_dict["llm_text"],
+        prompt_dict["llm_text"] = parse_text_field(
+            text_field=prompt_dict["llm_text"],
             agent_list=agent_list,
             task_id=prompt_dict["task_id"],
+            prompt_type=prompt_dict["type"],
         )
 
-    # Parse response_options column from string format to appropriate Python format
-    for prompt_dict in prompts_list:
-        if (
-            prompt_dict["type"] == "context"
-        ):  # No responses are expected for context prompts
-            continue
+        prompt_dict["response_options"] = parse_text_field(
+            text_field=prompt_dict["response_options"],
+            agent_list=agent_list,
+            task_id=prompt_dict["task_id"],
+            prompt_type=prompt_dict["type"],
+        )
 
-        try:
-            prompt_dict["response_options"] = ast.literal_eval(
-                prompt_dict["response_options"]
-            )
-        except (ValueError, SyntaxError):
-            # If the response options are not in a valid format, treat them as a string
-            warnings.warn(
-                f"The response_options field for task_id '{prompt_dict.get('task_id', 'Unknown ID')}' is not a valid Python literal expression and will be treated as a string: {prompt_dict['response_options']}"
-            )
-            continue
-
-    return {"experiment_prompts": prompts_list}
+    return {"interview_prompts": prompts_list}
 
 
 def extract_constants(file_path: str, sheet_name: str) -> dict:
@@ -312,7 +320,7 @@ def print_experimental_settings(experiment: AItoAIInterviewExperiment) -> None:
         Role Assignment Strategy: {role_assignment_strategy}
         Role Column (Only valid when using manual assignment strategy): {role_column}
         Random Seed: {random_seed}
-        Experiment Prompts: {experiment_prompts}
+        Interview Prompts: {interview_prompts}
 
         """.format(
             experiment_id=experiment.experiment_id,
@@ -331,7 +339,7 @@ def print_experimental_settings(experiment: AItoAIInterviewExperiment) -> None:
             role_assignment_strategy=experiment.role_assignment_strategy,
             role_column=experiment.role_column,
             random_seed=experiment.random_seed,
-            experiment_prompts=experiment.experiment_prompts,
+            interview_prompts=experiment.interview_prompts,
         )
     )
 
@@ -412,7 +420,7 @@ def main():
                     file_path=prompt_template_file_path, sheet_name=sheet_name
                 )
             )
-        elif sheet_name == "prompts_template":
+        elif sheet_name == "interview_prompts":
             prompt_template_dict.update(
                 extract_prompts(
                     file_path=prompt_template_file_path, sheet_name=sheet_name

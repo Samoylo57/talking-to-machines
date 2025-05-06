@@ -2,7 +2,22 @@ import time
 from typing import List, Any
 from openai import OpenAI
 
-RETRY_DELAY = 600
+RETRY_DELAY = 60
+OPENAI_MODELS = [
+    "gpt-4.5-preview",
+    "o3",
+    "o4-mini",
+    "o1-pro",
+    "o1",
+    "gpt-4.1",
+    "gpt-4.1-mini",
+    "gpt-4.1-nano",
+    "gpt-4o",
+    "gpt-4o-mini",
+    "gpt-4-turbo",
+    "gpt-4",
+    "gpt-3.5-turbo",
+]
 
 
 def query_llm(llm_client: Any, model_info: str, message_history: List[dict]) -> str:
@@ -16,7 +31,7 @@ def query_llm(llm_client: Any, model_info: str, message_history: List[dict]) -> 
     Returns:
         str: Response from the LLM.
     """
-    if model_info in ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo"]:
+    if model_info in OPENAI_MODELS:
         return query_open_ai(
             llm_client=llm_client,
             model_info=model_info,
