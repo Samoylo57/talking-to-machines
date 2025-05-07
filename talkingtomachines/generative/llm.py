@@ -1,4 +1,5 @@
 import time
+import warnings
 from typing import List, Any
 from openai import OpenAI
 
@@ -43,9 +44,14 @@ def query_llm(llm_client: Any, model_info: str, message_history: List[dict]) -> 
             message_history=message_history,
         )
     else:
-        # Log the exception
-        print(f"Model type {model_info} is not supported.")
-        return ""
+        warnings.warn(
+            f"{model_info} is not 'hf-inference' and not one of the OpenAI instruct models ({OPENAI_MODELS}). Defaulting to query OpenAI endpoint."
+        )
+        return query_open_ai(
+            llm_client=llm_client,
+            model_info=model_info,
+            message_history=message_history,
+        )
 
 
 def query_open_ai(

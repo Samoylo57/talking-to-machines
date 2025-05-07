@@ -1,4 +1,5 @@
 import re
+import warnings
 from typing import Any, Callable
 from talkingtomachines.generative.prompt import (
     generate_conversational_agent_system_message,
@@ -71,7 +72,7 @@ class SyntheticAgent:
         self.profile_prompt = profile_prompt_generator(profile_info)
         self.model_info = model_info
         self.api_endpoint = api_endpoint
-        self.llm_client = self.initialise_llm_client()
+        self.llm_client = self._initialise_llm_client()
 
     def _initialise_llm_client(self):
         """Initialise a language model client based on the provided model information and API endpoint.
@@ -92,7 +93,10 @@ class SyntheticAgent:
             )
 
         else:
-            raise ValueError(f"{self.model_info} is not supported.")
+            warnings.warn(
+                f"{self.model_info} is not 'hf-inference' and not one of the OpenAI instruct models ({OPENAI_MODELS}). Defaulting to loading OpenAI configurations."
+            )
+            return OpenAI(api_key=DevelopmentConfig.OPENAI_API_KEY)
 
     def to_dict(self) -> dict[str, Any]:
         """Converts the SyntheticAgent object to a dictionary.
@@ -317,7 +321,7 @@ class ConversationalSyntheticAgent(SyntheticAgent):
 
         try:
             if generate_speculation_score == "1":
-                self.insert_speculation_instruction()
+                self._insert_speculation_instruction()
 
             if validate_response == "1":  # Validate response based on response_options
                 for _ in range(NUM_RETRY):
@@ -326,7 +330,7 @@ class ConversationalSyntheticAgent(SyntheticAgent):
                         model_info=self.model_info,
                         message_history=self.message_history,
                     )
-                    if validate_response(
+                    if self._validate_response(
                         response=response, response_options=response_options
                     ):
                         break

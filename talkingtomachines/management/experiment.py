@@ -1,6 +1,7 @@
 import pandas as pd
 import datetime
 import random
+import warnings
 import concurrent.futures
 from collections import defaultdict
 from typing import Any, List
@@ -71,11 +72,11 @@ class Experiment:
 
     def __init__(self, experiment_id: str = ""):
         if experiment_id == "":
-            self.experiment_id = self.generate_experiment_id()
+            self.experiment_id = self._generate_experiment_id()
         else:
             self.experiment_id = experiment_id
 
-    def generate_experiment_id(self) -> str:
+    def _generate_experiment_id(self) -> str:
         """Generates a unique ID for the experiment by concatenating the date and time information.
 
         Returns:
@@ -156,31 +157,31 @@ class AIConversationalExperiment(Experiment):
             experiment_id,
         )
 
-        self.model_info = self.check_model_info(model_info=model_info)
+        self.model_info = self._check_model_info(model_info=model_info)
         self.experiment_context = experiment_context
-        self.agent_profiles = self.check_agent_profiles(agent_profiles=agent_profiles)
+        self.agent_profiles = self._check_agent_profiles(agent_profiles=agent_profiles)
         self.api_endpoint = api_endpoint
-        self.max_conversation_length = self.check_max_conversation_length(
+        self.max_conversation_length = self._check_max_conversation_length(
             max_conversation_length=max_conversation_length
         )
-        self.treatments = self.check_treatments(treatments=treatments)
-        self.treatment_assignment_strategy = self.check_treatment_assignment_strategy(
+        self.treatments = self._check_treatments(treatments=treatments)
+        self.treatment_assignment_strategy = self._check_treatment_assignment_strategy(
             treatment_assignment_strategy=treatment_assignment_strategy,
             treatment_column=treatment_column,
         )
         self.treatment_column = treatment_column
-        self.session_assignment_strategy = self.check_session_assignment_strategy(
+        self.session_assignment_strategy = self._check_session_assignment_strategy(
             session_assignment_strategy=session_assignment_strategy,
             session_column=session_column,
         )
         self.session_column = session_column
-        self.role_assignment_strategy = self.check_role_assignment_strategy(
+        self.role_assignment_strategy = self._check_role_assignment_strategy(
             role_assignment_strategy=role_assignment_strategy, role_column=role_column
         )
         self.role_column = role_column
         self.random_seed = random_seed
 
-    def check_model_info(self, model_info: str) -> str:
+    def _check_model_info(self, model_info: str) -> str:
         """Checks if the provided model_info is supported.
 
         Args:
@@ -193,13 +194,13 @@ class AIConversationalExperiment(Experiment):
             ValueError: If the provided model_info is not supported based on SUPPORTED_MODELS.
         """
         if model_info not in SUPPORTED_MODELS:
-            raise ValueError(
-                f"Unsupported model_info: {model_info}. Supported models are: {SUPPORTED_MODELS}."
+            warnings.warn(
+                f"{model_info} is not one of the supported models ({SUPPORTED_MODELS}). Defaulting to querying OpenAI endpoint."
             )
 
         return model_info
 
-    def check_agent_profiles(self, agent_profiles: pd.DataFrame) -> pd.DataFrame:
+    def _check_agent_profiles(self, agent_profiles: pd.DataFrame) -> pd.DataFrame:
         """Checks to ensure that provided agent_profiles is not empty and contains a ID column.
 
         Args:
@@ -219,7 +220,7 @@ class AIConversationalExperiment(Experiment):
 
         return agent_profiles
 
-    def check_max_conversation_length(self, max_conversation_length: int) -> int:
+    def _check_max_conversation_length(self, max_conversation_length: int) -> int:
         """Checks if the provided max_conversation is an integer greater than or equal to 1.
 
         Args:
@@ -238,7 +239,7 @@ class AIConversationalExperiment(Experiment):
 
         return max_conversation_length
 
-    def check_treatments(self, treatments: dict[str, Any]) -> dict[str, Any]:
+    def _check_treatments(self, treatments: dict[str, Any]) -> dict[str, Any]:
         """Checks if the provided treatments is valid.
 
         Args:
@@ -258,7 +259,7 @@ class AIConversationalExperiment(Experiment):
 
         return treatments
 
-    def check_treatment_assignment_strategy(
+    def _check_treatment_assignment_strategy(
         self,
         treatment_assignment_strategy: str,
         treatment_column: str,
@@ -296,7 +297,7 @@ class AIConversationalExperiment(Experiment):
 
         return treatment_assignment_strategy
 
-    def check_session_assignment_strategy(
+    def _check_session_assignment_strategy(
         self, session_assignment_strategy: str, session_column: str
     ) -> str:
         """Checks if the provided session_assignment_strategy is supported.
@@ -329,7 +330,7 @@ class AIConversationalExperiment(Experiment):
 
         return session_assignment_strategy
 
-    def check_role_assignment_strategy(
+    def _check_role_assignment_strategy(
         self, role_assignment_strategy: str, role_column: str
     ) -> str:
         """Checks if the provided role_assignment_strategy is supported.
@@ -459,21 +460,21 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
             random_seed,
         )
 
-        self.num_agents_per_session = self.check_num_agents_per_session(
+        self.num_agents_per_session = self._check_num_agents_per_session(
             num_agents_per_session=num_agents_per_session
         )
-        self.agent_roles = self.check_agent_roles(agent_roles=agent_roles)
-        self.num_sessions = self.check_num_sessions(num_sessions=num_sessions)
-        self.session_id_list = self.generate_session_id_list()
-        self.treatment_assignment = self.assign_treatment(random_seed=self.random_seed)
+        self.agent_roles = self._check_agent_roles(agent_roles=agent_roles)
+        self.num_sessions = self._check_num_sessions(num_sessions=num_sessions)
+        self.session_id_list = self._generate_session_id_list()
+        self.treatment_assignment = self._assign_treatment(random_seed=self.random_seed)
         if self.treatment_assignment_strategy == "manual":
-            self.check_manually_assigned_treatments()
-        self.session_assignment = self.assign_session(random_seed=self.random_seed)
-        self.role_assignment = self.assign_role(random_seed=self.random_seed)
+            self._check_manually_assigned_treatments()
+        self.session_assignment = self._assign_session(random_seed=self.random_seed)
+        self.role_assignment = self._assign_role(random_seed=self.random_seed)
         if self.role_assignment_strategy == "manual":
-            self.check_manually_assigned_roles()
+            self._check_manually_assigned_roles()
 
-    def check_num_agents_per_session(self, num_agents_per_session: int) -> int:
+    def _check_num_agents_per_session(self, num_agents_per_session: int) -> int:
         """Checks if the provided num_agents_per_session is 2 or more and matches with the number of agent profiles provided.
 
         Args:
@@ -497,7 +498,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
 
         return num_agents_per_session
 
-    def check_agent_roles(self, agent_roles: dict[str, str]) -> dict[str, str]:
+    def _check_agent_roles(self, agent_roles: dict[str, str]) -> dict[str, str]:
         """Checks if the provided agent_roles is valid.
 
         Args:
@@ -516,7 +517,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
 
         return agent_roles
 
-    def check_num_sessions(self, num_sessions: int) -> int:
+    def _check_num_sessions(self, num_sessions: int) -> int:
         """Checks if the provided num_sessions is greater than 1.
 
         Args:
@@ -535,7 +536,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
 
         return num_sessions
 
-    def generate_session_id_list(self) -> List[Any]:
+    def _generate_session_id_list(self) -> List[Any]:
         """Generates a list of session IDs.
 
         If either the treatment assignment strategy or the agent assignment strategy is set to 'manual',
@@ -551,7 +552,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
         else:
             return list(range(self.num_sessions))
 
-    def assign_treatment(self, random_seed: int) -> dict[int, str]:
+    def _assign_treatment(self, random_seed: int) -> dict[int, str]:
         """Assign treatments to sessions based on the specified treatment assignment strategy.
 
         Args:
@@ -598,7 +599,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
                 f"Invalid treatment_assignment_strategy: {self.treatment_assignment_strategy}. Supported strategies are: {SUPPORTED_TREATMENT_ASSIGNMENT_STRATEGIES}."
             )
 
-    def check_manually_assigned_treatments(self) -> None:
+    def _check_manually_assigned_treatments(self) -> None:
         """Checks if the manually defined treatments align with the treatment labels provided in self.treatments.
 
         Raises:
@@ -614,7 +615,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
         else:
             pass
 
-    def assign_session(self, random_seed: int) -> dict[int, List[ProfileInfo]]:
+    def _assign_session(self, random_seed: int) -> dict[int, List[ProfileInfo]]:
         """Assigns agent profiles to each session based on the given number of agents per session and agent assignment strategy.
         However, if the session_assignment_strategy is 'manual', then assign the agents to their respective sessions based on the
         assignment defined in agent_profiles.
@@ -657,7 +658,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
 
         return session_assignment
 
-    def assign_role(self, random_seed: int) -> dict[int, str]:
+    def _assign_role(self, random_seed: int) -> dict[int, str]:
         """Assigns roles to agents based on the specified role assignment strategy.
 
         Args:
@@ -703,7 +704,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
 
         return role_assignment
 
-    def check_manually_assigned_roles(self) -> None:
+    def _check_manually_assigned_roles(self) -> None:
         """Validates that all manually assigned roles are defined in the agent roles.
 
         This method checks whether the roles manually assigned in the `role_assignment`
@@ -786,8 +787,8 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
                 for participant_id, assigned_role in self.role_assignment.items()
                 if participant_id in session_participant_ids
             }
-            session_info["agents"] = self.initialize_agents(session_info)
-            session_info = self.run_session(session_info, test_mode=test_mode)
+            session_info["agents"] = self._initialize_agents(session_info)
+            session_info = self._run_session(session_info, test_mode=test_mode)
             updated_session_agent = {}
             for agent_role, agent in session_info["agents"].items():
                 updated_session_agent[agent_role] = agent.to_dict()
@@ -814,11 +815,11 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
                     sid, session_info = future.result()
                     experiment["sessions"][sid] = session_info
 
-        self.save_experiment(experiment, save_results_as_csv=save_results_as_csv)
+        self._save_experiment(experiment, save_results_as_csv=save_results_as_csv)
 
         return experiment
 
-    def initialize_agents(
+    def _initialize_agents(
         self, session_info: dict[str, Any]
     ) -> dict[str, ConversationalSyntheticAgent]:
         """Initializes and returns a dictionary of ConversationalSyntheticAgent objects based on the provided session information.
@@ -853,7 +854,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
 
         return agent_dict
 
-    def run_session(
+    def _run_session(
         self, session_info: dict[str, Any], test_mode: bool = False
     ) -> dict[str, Any]:
         """Runs a session involving a conversation between multiple AI agents.
@@ -899,7 +900,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
                 print(message_dict)
                 print()
 
-            # If no interview script is provided, the sequence of conversation will follow the sequence of agents defined in self.initialize_agents
+            # If no interview script is provided, the sequence of conversation will follow the sequence of agents defined in self._initialize_agents
             agent = agent_list[conversation_length % num_agents]
 
             response = agent.respond(message_history=message_history)
@@ -921,7 +922,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
         session_info["message_history"] = message_history
         return session_info
 
-    def save_experiment(
+    def _save_experiment(
         self, experiment: dict[int, Any], save_results_as_csv: bool = False
     ) -> None:
         """Save the experimental data.
@@ -1044,17 +1045,19 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
             random_seed,
         )
 
-        self.num_agents_per_session = self.check_num_agents_per_session(
+        self.num_agents_per_session = self._check_num_agents_per_session(
             num_agents_per_session=num_agents_per_session
         )
-        self.agent_roles = self.check_agent_roles(agent_roles=agent_roles)
-        self.session_assignment = self.assign_session(random_seed=self.random_seed)
-        self.role_assignment = self.assign_role(random_seed=self.random_seed)
+        self.agent_roles = self._check_agent_roles(agent_roles=agent_roles)
+        self.session_assignment = self._assign_session(random_seed=self.random_seed)
+        self.role_assignment = self._assign_role(random_seed=self.random_seed)
         if self.role_assignment_strategy == "manual":
-            self.check_manually_assigned_roles()
-        self.interview_prompts = self.check_prompts(interview_prompts=interview_prompts)
+            self._check_manually_assigned_roles()
+        self.interview_prompts = self._check_prompts(
+            interview_prompts=interview_prompts
+        )
 
-    def check_num_agents_per_session(self, num_agents_per_session: int) -> int:
+    def _check_num_agents_per_session(self, num_agents_per_session: int) -> int:
         """Checks if the provided num_agents_per_session is 2 or more and matches with the number of agent profiles provided.
 
         Args:
@@ -1081,7 +1084,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
 
         return num_agents_per_session
 
-    def check_agent_roles(self, agent_roles: dict[str, str]) -> dict[str, str]:
+    def _check_agent_roles(self, agent_roles: dict[str, str]) -> dict[str, str]:
         """Checks if the provided agent_roles is valid.
 
         Args:
@@ -1105,7 +1108,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
 
         return agent_roles
 
-    def assign_session(self, random_seed: int) -> dict[int, List[ProfileInfo]]:
+    def _assign_session(self, random_seed: int) -> dict[int, List[ProfileInfo]]:
         """Assigns agent profiles to each session based on the given number of agents per session (minus the special roles) and agent assignment strategy.
         However, if the session_assignment_strategy is 'manual', then assign the agents to their respective sessions based on the
         assignment defined in agent_profiles.
@@ -1154,7 +1157,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
 
         return session_assignment
 
-    def assign_role(self, random_seed: int) -> dict[int, str]:
+    def _assign_role(self, random_seed: int) -> dict[int, str]:
         """Assigns roles to agents based on the specified role assignment strategy.
 
         Args:
@@ -1204,7 +1207,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
 
         return role_assignment
 
-    def check_manually_assigned_roles(self) -> None:
+    def _check_manually_assigned_roles(self) -> None:
         """Validates that all manually assigned roles are defined in the agent roles, excluding special roles like "Facilitator" and "Summariser".
 
         This method checks whether the roles manually assigned in the `role_assignment`
@@ -1232,7 +1235,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
         else:
             pass
 
-    def check_prompts(
+    def _check_prompts(
         self, interview_prompts: List[dict[str, Any]]
     ) -> List[dict[str, Any]]:
         """Validates and processes a list of interview prompts.
@@ -1385,8 +1388,8 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                 for participant_id, assigned_role in self.role_assignment.items()
                 if participant_id in session_participant_ids
             }
-            session_info["agents"] = self.initialize_agents(session_info)
-            session_info = self.run_session(
+            session_info["agents"] = self._initialize_agents(session_info)
+            session_info = self._run_session(
                 session_info=session_info,
                 interview_prompts=self.interview_prompts,
                 test_mode=test_mode,
@@ -1417,11 +1420,11 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                     sid, session_info = future.result()
                     experiment["sessions"][sid] = session_info
 
-        self.save_experiment(experiment, save_results_as_csv=save_results_as_csv)
+        self._save_experiment(experiment, save_results_as_csv=save_results_as_csv)
 
         return experiment
 
-    def initialize_agents(
+    def _initialize_agents(
         self, session_info: dict[str, Any]
     ) -> dict[str, ConversationalSyntheticAgent]:
         """Initializes and returns a dictionary of ConversationalSyntheticAgent objects for both special and user-defined agent roles based on the provided session information.
@@ -1489,7 +1492,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
 
         return agent_dict
 
-    def sort_tasks(self, prompts: list[dict]) -> list[dict]:
+    def _sort_tasks(self, prompts: list[dict]) -> list[dict]:
         """Sorts and shuffles a list of prompts based on their "task_order" value.
         This method groups the input prompts by their "task_order" value, sorts the groups
         in ascending order of "task_order", and shuffles the prompts within each group
@@ -1519,7 +1522,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
 
         return sorted_prompts
 
-    def format_response_options(
+    def _format_response_options(
         self, response_options: Any, randomize_response_order: int = False
     ) -> str:
         """Formats the given response options into a human-readable string.
@@ -1561,7 +1564,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
         else:
             return f"Answer with {str(response_options)}:"
 
-    def run_session(
+    def _run_session(
         self,
         session_info: dict[str, Any],
         interview_prompts: List[dict[str, str]],
@@ -1590,7 +1593,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
 
         if interview_prompts:
             # Sort the order of tasks based on the task_order field. If task order is repeated, then it is expected that the task order are randomised
-            interview_prompts = self.sort_tasks(interview_prompts)
+            interview_prompts = self._sort_tasks(interview_prompts)
 
             for round in interview_prompts:
                 # Facilitator is providing instructions at the beginning to all subjects and allowing the subjects to continue the discussion.
@@ -1599,7 +1602,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                     response = round["llm_text"]["Facilitator"]
                     response = response.replace(
                         "{{response_options}}",
-                        self.format_response_options(
+                        self._format_response_options(
                             response_options=round["response_options"]["Facilitator"],
                             randomize_response_order=round["randomized_response_order"],
                         ),
@@ -1641,7 +1644,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                         # Format interview question
                         question = question.replace(
                             "{{response_options}}",
-                            self.format_response_options(
+                            self._format_response_options(
                                 response_options=round["response_options"][agent_role],
                                 randomize_response_order=round[
                                     "randomized_response_order"
@@ -1699,7 +1702,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                 if test_mode:
                     print(message_dict)
                     print()
-                # If no interview script is provided, the sequence of conversation will follow the sequence of agents defined in self.initialize_agents
+                # If no interview script is provided, the sequence of conversation will follow the sequence of agents defined in self._initialize_agents
                 agent = agent_list[conversation_length % num_agents]
 
                 if conversation_length == 0:
