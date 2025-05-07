@@ -88,7 +88,7 @@ class SyntheticAgent:
 
         elif self.model_info in ["hf-inference"]:
             return OpenAI(
-                base_url=self.api_endpoint, api_key=DevelopmentConfig.HF_TOKEN
+                base_url=self.api_endpoint, api_key=DevelopmentConfig.HF_API_KEY
             )
 
         else:
