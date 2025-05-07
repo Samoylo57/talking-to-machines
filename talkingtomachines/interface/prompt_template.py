@@ -7,6 +7,7 @@ from tqdm import tqdm
 from talkingtomachines.interface.validate_template import *
 from talkingtomachines.interface.initialize_experiment import initialize_experiment
 from talkingtomachines.management.experiment import AItoAIInterviewExperiment
+from talkingtomachines.config import DevelopmentConfig
 
 PROMPT_TEMPLATE_SHEETS = [
     "experimental_setting",
@@ -307,6 +308,8 @@ def print_experimental_settings(experiment: AItoAIInterviewExperiment) -> None:
         Experiment Settings for {experiment_id}:
         {line_separator}
         Model Info: {model_info}
+        Open AI API Key: {openai_api_key}
+        HuggingFace API Key: {hf_api_key}
         API Endpoint (only valid when using HuggingFace Models): {api_endpoint}
         Agent Roles: {agent_roles}
         Number of Agents per Session (Including Interviewer): {num_agents_per_session}
@@ -326,6 +329,8 @@ def print_experimental_settings(experiment: AItoAIInterviewExperiment) -> None:
             experiment_id=experiment.experiment_id,
             line_separator="=" * (25 + len(experiment.experiment_id)),
             model_info=experiment.model_info,
+            openai_api_key=DevelopmentConfig.OPENAI_API_KEY,
+            hf_api_key=DevelopmentConfig.HF_API_KEY,
             api_endpoint=experiment.api_endpoint,
             agent_roles=experiment.agent_roles,
             num_agents_per_session=experiment.num_agents_per_session,
