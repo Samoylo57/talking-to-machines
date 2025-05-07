@@ -1,0 +1,12 @@
+include LICENSE
+include README.md
+recursive-include docs *
+exclude dist/*
+exclude build/*
+exclude *.egg-info/*
+exclude __MACOSX/*
+exclude *.DS_Store
+exlcude .env
+prune storage
+prune demos
+prune .git

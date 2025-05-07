@@ -365,7 +365,7 @@ def run_experiment_wrapper(args: tuple) -> None:
 def main():
     # Set up command-line argument parsing
     parser = argparse.ArgumentParser(
-        description="Read the prompt template provided by the user"
+        description="Parse the prompt template provided by the user and initialise the experiment in the Talking to Machines platform."
     )
     parser.add_argument(
         "prompt_template_file_path",
@@ -377,7 +377,7 @@ def main():
         "test_mode",
         type=str,
         default="",
-        help="Boolean indicating whether the experiment will be run in test mode",
+        help="Boolean indicating whether the experiment will be run in test mode. If this argument is not provided, the experiment will default to test mode.",
     )
     args = parser.parse_args()
     prompt_template_file_path = args.prompt_template_file_path

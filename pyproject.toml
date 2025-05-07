@@ -1,0 +1,49 @@
+# ─── Build system ─────────────────────────────────────────────────────────────
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+# ─── Project metadata ─────────────────────────────────────────────────────────
+[project] 
+name = "talkingtomachines" 
+version = "0.1.0" 
+description = "A python package for conducting AI-AI experiments for social science research." 
+readme = "README.md" 
+requires-python = ">=3.9" 
+license = {text = "MIT"}
+authors = [
+  { name = "Raymond Low", email = "raymond.low@nuffield.ox.ac.uk" },
+  { name = "Raymond Duch", email = "raymond.duch@nuffield.ox.ac.uk" },
+  { name = "Tommaso Batistoni", email = "tommaso.batistoni@nuffield.ox.ac.uk" },
+]
+dependencies = [
+  "flask>=2.3",
+  "click>=8.1",
+  "python-dotenv>=1.0",
+  "pandas>=2.2",
+  "numpy>=1.26",
+  "requests>=2.32",
+  "scikit-learn>=1.4", 
+  "nltk==3.8.1", 
+  "psycopg2-binary==2.9.9", 
+  "openai==1.37.0"
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[tool.setuptools]
+license-files = ["LICENSE"]
+
+[project.urls]
+Homepage = "https://github.com/talking-to-machines/talking-to-machines"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["talkingtomachines*"]  # the real library & its subpackages
+exclude = ["demos*", "storage*"]  # examples / data folders, not code
+
+[project.scripts]
+talkingtomachines = "talkingtomachines.cli:main"
