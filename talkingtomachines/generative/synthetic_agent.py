@@ -73,7 +73,7 @@ class SyntheticAgent:
         self.api_endpoint = api_endpoint
         self.llm_client = self.initialise_llm_client()
 
-    def initialise_llm_client(self):
+    def _initialise_llm_client(self):
         """Initialise a language model client based on the provided model information and API endpoint.
 
         Returns:
@@ -190,9 +190,7 @@ class ConversationalSyntheticAgent(SyntheticAgent):
             role_description=self.role_description,
             profile_prompt=self.profile_prompt,
         )
-        self.message_history = [
-            {"role": "system", "content": self.system_message},
-        ]
+        self.message_history = []
 
     def to_dict(self) -> dict[str, Any]:
         """Converts the ConversationalSyntheticAgent object to a dictionary.
@@ -215,19 +213,46 @@ class ConversationalSyntheticAgent(SyntheticAgent):
             "message_history": self.message_history,
         }
 
-    def update_message_history(self, message: str, role: str) -> None:
-        """Update the message history of the synthetic agent with a new message.
+    def _build_message_history(self, message_history: list[dict]) -> list[dict]:
+        """Builds and formats the message history for a conversational agent.
 
         Args:
-            message (str): A message to add to the conversation history.
-            role (str): The identifier of the party that generated the message.
+            message_history (list[dict]): A list of dictionaries representing the
+                message history. Each dictionary contains a single key-value pair
+                where the key is the role (e.g., "user", "assistant", or other
+                participants) and the value is the message content.
 
         Returns:
-            None
+            list[dict]: A formatted list of dictionaries representing the message
+                history. The returned list includes system messages and reformatted
+                user/assistant messages. Messages from other participants are
+                prefixed with their role in the content.
         """
-        self.message_history.append({"role": role, "content": message})
+        formatted_message_history = [
+            {"role": "system", "content": self.experiment_context},
+            {"role": "system", "content": self.system_message},
+        ]
 
-    def validate_response(self, response: str, response_options: Any) -> bool:
+        for message in message_history:
+            role = message.keys()[0]
+            role_response = message.values()[0]
+
+            if role == "system":
+                continue
+
+            elif role == self.role:
+                formatted_message_history.apppend(
+                    {"role": "assistant", "content": role_response}
+                )
+
+            else:  # Other participants in the same session
+                formatted_message_history.append(
+                    {"role": "user", "content": f"{role}: {role_response}"}
+                )
+
+        return formatted_message_history
+
+    def _validate_response(self, response: str, response_options: Any) -> bool:
         """Validates whether a given response contains any of the valid response options as whole words.
 
         Args:
@@ -252,9 +277,25 @@ class ConversationalSyntheticAgent(SyntheticAgent):
                 return True
         return False
 
+    def _insert_speculation_instruction(self) -> None:
+        """Appends a speculation instruction to the last message in the message history
+        if the content of the message starts with "Facilitator".
+
+        The speculation instruction provides guidance to include a speculation score
+        at the end of the response, ranging from 0 (not speculative at all) to 100
+        (fully speculative), in the specified format.
+
+        This method does nothing if the last message does not start with "Facilitator".
+        """
+        if self.message_history[-1]["content"].startswith("Facilitator"):
+            speculation_instruction = "\n\nAt the end of your response, please include a speculation score from 0 (not speculative at all) to 100 (fully speculative) in the format:\nSpeculation Score: XXX"
+            self.message_history[-1]["content"] += speculation_instruction
+        else:
+            pass
+
     def respond(
         self,
-        question: str,
+        message_history: list[dict],
         validate_response: str = "0",
         response_options: Any = [],
         generate_speculation_score: str = "0",
@@ -262,7 +303,7 @@ class ConversationalSyntheticAgent(SyntheticAgent):
         """Generate a response to a question posed to the synthetic agent.
 
         Args:
-            question (str): A question or prompt to which the agent should respond.
+            message_history (list[dict]): The history of the conversation during the experiment.
             validate_response (str): Either "0" or "1" to indicate whether to perform response validation or not
             response_options (Any): A list of options to choose from for the response.
             generate_speculation_score (str): Either "0" or "1" to indicate whether to generate a speculation score or not.
@@ -270,11 +311,13 @@ class ConversationalSyntheticAgent(SyntheticAgent):
         Returns:
             str: The response generated by the synthetic agent.
         """
+        self.message_history = self._build_message_history(
+            message_history=message_history
+        )
+
         try:
             if generate_speculation_score == "1":
-                speculation_instruction = "\n\nAt the end of your response, please include a speculation score from 0 (not speculative at all) to 100 (fully speculative) in the format:\nSpeculation Score: XXX"
-                question += speculation_instruction
-            self.update_message_history(message=question, role="user")
+                self.insert_speculation_instruction()
 
             if validate_response == "1":  # Validate response based on response_options
                 for _ in range(NUM_RETRY):
@@ -295,7 +338,6 @@ class ConversationalSyntheticAgent(SyntheticAgent):
                     message_history=self.message_history,
                 )
 
-            self.update_message_history(message=response, role="assistant")
             return response
 
         except Exception as e:

@@ -876,12 +876,17 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
             "Thank you for the conversation" not in response
             and conversation_length < self.max_conversation_length
         ):
-            if agent_role == "system":
-                message_dict = {
-                    agent_role: response,
-                    "task_id": conversation_length,
-                }
-                message_history.append(message_dict)
+            if agent_role == "system" and conversation_length == 0:
+                starting_message = [
+                    {
+                        agent_role: response,
+                        "task_id": conversation_length,
+                    },
+                    {
+                        "user": "Start",
+                    },
+                ]
+                message_history.extend(starting_message)
             else:
                 message_dict = {
                     agent_role: response,
@@ -897,10 +902,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
             # If no interview script is provided, the sequence of conversation will follow the sequence of agents defined in self.initialize_agents
             agent = agent_list[conversation_length % num_agents]
 
-            if conversation_length == 0:
-                response = agent.respond(question="Start")
-            else:
-                response = agent.respond(question=response)
+            response = agent.respond(message_history=message_history)
             agent_role = agent.role
             conversation_length += 1
 
@@ -1591,7 +1593,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
             interview_prompts = self.sort_tasks(interview_prompts)
 
             for round in interview_prompts:
-                # Facilitator is providing instructions at the beginning to all subjects and allowing the subjects to continue the discussion
+                # Facilitator is providing instructions at the beginning to all subjects and allowing the subjects to continue the discussion.
                 if round["type"] in ["context", "discussion"]:
                     # Format context/discussion question
                     response = round["llm_text"]["Facilitator"]
@@ -1616,7 +1618,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                     # Loop through each agent and get their response
                     for agent_role, agent in session_info["agents"].items():
                         response = agent.respond(
-                            question=response,
+                            message_history=message_history,
                             generate_speculation_score=round[
                                 "generate_speculation_score"
                             ],
@@ -1634,7 +1636,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                             print()
 
                 elif round["type"] == "question":
-                    # Facilitator is posing the same question to each subject
+                    # Facilitator is posing the same question to each subject.
                     for agent_role, question in session_info["llm_text"].items():
                         # Format interview question
                         question = question.replace(
@@ -1659,7 +1661,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
 
                         agent = session_info["agents"][agent_role]
                         response = agent.respond(
-                            question=question,
+                            message_history=message_history,
                             validate_response=round["validate_response"],
                             response_options=round["response_options"][agent_role],
                             generate_speculation_score=round[
@@ -1701,9 +1703,9 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                 agent = agent_list[conversation_length % num_agents]
 
                 if conversation_length == 0:
-                    response = agent.respond(question="Start")
-                else:
-                    response = agent.respond(question=response)
+                    message_history.append({"user": "Start"})
+
+                response = agent.respond(message_history=message_history)
                 agent_role = agent.role
                 conversation_length += 1
 
