@@ -9,4 +9,5 @@ exclude *.DS_Store
 exlcude .env
 prune storage
 prune demos
+prune experiment_results
 prune .git

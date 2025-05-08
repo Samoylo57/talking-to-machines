@@ -460,11 +460,11 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
             random_seed,
         )
 
+        self.agent_roles = agent_roles
+        self.num_sessions = self._check_num_sessions(num_sessions=num_sessions)
         self.num_agents_per_session = self._check_num_agents_per_session(
             num_agents_per_session=num_agents_per_session
         )
-        self.agent_roles = self._check_agent_roles(agent_roles=agent_roles)
-        self.num_sessions = self._check_num_sessions(num_sessions=num_sessions)
         self.session_id_list = self._generate_session_id_list()
         self.treatment_assignment = self._assign_treatment(random_seed=self.random_seed)
         if self.treatment_assignment_strategy == "manual":
@@ -486,36 +486,19 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
         Raises:
             ValueError: If the provided num_agents_per_session is not valid.
         """
+        # Check if number of agents per session is 2 or more
         if num_agents_per_session < 2:
             raise ValueError(
                 f"Invalid num_agents_per_session: {num_agents_per_session}. For AI-AI conversation-based experiments, num_agents_per_session should be an integer that is equal to or greater than 2."
             )
 
+        # Check if number of agents per session multipled by the number of sessions is less than the number of profiles provided
         if self.num_sessions * num_agents_per_session != len(self.agent_profiles):
             raise ValueError(
                 f"Total number of agents required for experiment ({self.num_sessions * num_agents_per_session}) does not match with the number of profiles provided in agent_profiles ({len(self.agent_profiles)})."
             )
 
         return num_agents_per_session
-
-    def _check_agent_roles(self, agent_roles: dict[str, str]) -> dict[str, str]:
-        """Checks if the provided agent_roles is valid.
-
-        Args:
-            agent_roles (dict[str, str]): The agent_roles to be checked.
-
-        Returns:
-            dict[str, str]: The validated agent_roles.
-
-        Raises:
-            ValueError: If the provided agent_roles is not valid.
-        """
-        if len(agent_roles) != self.num_agents_per_session:
-            raise ValueError(
-                f"Number of roles defined ({len(agent_roles)}) does not match the number of agents assigned to each session ({self.num_agents_per_session})."
-            )
-
-        return agent_roles
 
     def _check_num_sessions(self, num_sessions: int) -> int:
         """Checks if the provided num_sessions is greater than 1.
@@ -891,7 +874,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
             else:
                 message_dict = {
                     agent_role: response,
-                    "agent_id": agent.profile_info["ID"],
+                    "agent_id": agent.profile_info.get("ID", ""),
                     "task_id": conversation_length,
                 }
                 message_history.append(message_dict)
@@ -909,7 +892,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
 
         message_dict = {
             agent_role: response,
-            "agent_id": agent.profile_info["ID"],
+            "agent_id": agent.profile_info.get("ID", ""),
             "task_id": conversation_length,
         }
         message_history.append(message_dict)
@@ -1045,10 +1028,10 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
             random_seed,
         )
 
+        self.agent_roles = self._check_agent_roles(agent_roles=agent_roles)
         self.num_agents_per_session = self._check_num_agents_per_session(
             num_agents_per_session=num_agents_per_session
         )
-        self.agent_roles = self._check_agent_roles(agent_roles=agent_roles)
         self.session_assignment = self._assign_session(random_seed=self.random_seed)
         self.role_assignment = self._assign_role(random_seed=self.random_seed)
         if self.role_assignment_strategy == "manual":
@@ -1056,33 +1039,6 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
         self.interview_prompts = self._check_prompts(
             interview_prompts=interview_prompts
         )
-
-    def _check_num_agents_per_session(self, num_agents_per_session: int) -> int:
-        """Checks if the provided num_agents_per_session is 2 or more and matches with the number of agent profiles provided.
-
-        Args:
-            num_agents_per_session (int): The num_agents_per_session to be checked.
-
-        Returns:
-            int: The validated num_agents_per_session.
-
-        Raises:
-            ValueError: If the provided num_agents_per_session is not valid.
-        """
-        if num_agents_per_session < 2:
-            raise ValueError(
-                f"Invalid num_agents_per_session: {num_agents_per_session}. For AI-AI interview-based experiments, num_agents_per_session should be an integer that is equal to or greater than 2."
-            )
-
-        user_defined_roles = [
-            role for role in list(self.agent_roles.keys()) if role not in SPECIAL_ROLES
-        ]
-        if self.num_sessions * len(user_defined_roles) != len(self.agent_profiles):
-            raise ValueError(
-                f"Total number of user-defined agents required for experiment ({self.num_sessions * len(user_defined_roles)}) does not match with the number of profiles provided in agent_profiles ({len(self.agent_profiles)})."
-            )
-
-        return num_agents_per_session
 
     def _check_agent_roles(self, agent_roles: dict[str, str]) -> dict[str, str]:
         """Checks if the provided agent_roles is valid.
@@ -1096,17 +1052,47 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
         Raises:
             ValueError: If the provided agent_roles is not valid.
         """
-        if len(agent_roles) != self.num_agents_per_session:
-            raise ValueError(
-                f"Number of roles defined ({len(agent_roles)}) does not match the number of agents assigned to each session ({self.num_agents_per_session})."
-            )
-
         if "Facilitator" not in list(agent_roles.keys()):
             raise ValueError(
                 "For an AI-to-AI interview-based experiment, one of the agent roles must be 'Facilitator'."
             )
 
         return agent_roles
+
+    def _check_num_agents_per_session(self, num_agents_per_session: int) -> int:
+        """Checks if the provided num_agents_per_session is 1 or more and matches with the number of agent profiles provided.
+
+        Args:
+            num_agents_per_session (int): The num_agents_per_session to be checked.
+
+        Returns:
+            int: The validated num_agents_per_session.
+
+        Raises:
+            ValueError: If the provided num_agents_per_session is not valid.
+        """
+        # Ensure that number of agents per session is 1 or more
+        if num_agents_per_session < 1:
+            raise ValueError(
+                f"Invalid num_agents_per_session: {num_agents_per_session}. For AI-AI interview-based experiments, num_agents_per_session should be an integer that is equal to or greater than 1."
+            )
+
+        # Ensure that number of agents per session matches with the number of agent profiles provided
+        user_defined_roles = [
+            role for role in list(self.agent_roles.keys()) if role not in SPECIAL_ROLES
+        ]
+        if len(user_defined_roles) != num_agents_per_session:
+            raise ValueError(
+                f"Number of user-defined roles ({len(user_defined_roles)}) does not match the number of agents assigned to each session ({num_agents_per_session})."
+            )
+
+        # Ensure that number of agents per session multiplied by the number of sessions is less than the number of profiles provided
+        if self.num_sessions * len(user_defined_roles) != len(self.agent_profiles):
+            raise ValueError(
+                f"Total number of user-defined agents required for experiment ({self.num_sessions * len(user_defined_roles)}) does not match with the number of profiles provided in agent_profiles ({len(self.agent_profiles)})."
+            )
+
+        return num_agents_per_session
 
     def _assign_session(self, random_seed: int) -> dict[int, List[ProfileInfo]]:
         """Assigns agent profiles to each session based on the given number of agents per session (minus the special roles) and agent assignment strategy.
@@ -1208,7 +1194,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
         return role_assignment
 
     def _check_manually_assigned_roles(self) -> None:
-        """Validates that all manually assigned roles are defined in the agent roles, excluding special roles like "Facilitator" and "Summariser".
+        """Validates that all manually assigned roles are defined in the agent roles, excluding special roles like "Facilitator" and "Summarizer".
 
         This method checks whether the roles manually assigned in the `role_assignment`
         dictionary are a subset of the roles defined in the `agent_roles` dictionary.
@@ -1242,7 +1228,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
 
         Args:
             interview_prompts (List[dict[str, Any]]): A list of dictionaries where each dictionary represents a prompt
-                with various attributes such as "type", "var_name", "randomized_response_order", etc.
+                with various attributes such as "type", "var_name", "randomize_response_order", etc.
         Returns:
             List[dict[str, Any]]: The validated and processed list of interview prompts.
 
@@ -1251,10 +1237,10 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                 - The `interview_prompts` list is not empty.
                 - The first item in `interview_prompts` contains a "type" field with the value "context".
                 - The total length of the interview does not exceed the maximum conversation length
-                  (calculated as `len(interview_prompts) * self.num_agents_per_session`).
+                  (calculated as `len(interview_prompts) * total number of special and user-defined roles).
                 - Each prompt's "type" field contains only approved prompt types (defined in `SUPPORTED_PROMPT_TYPES`).
                 - Each prompt's "var_name" field contains unique variable names.
-                - The "randomized_response_order" field contains only approved values (0 or 1).
+                - The "randomize_response_order" field contains only approved values (0 or 1).
                 - The "validate_response" field contains only approved values (0 or 1).
                 - The "generate_speculation_score" field contains only approved values (0 or 1).
         """
@@ -1268,16 +1254,16 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
             or interview_prompts[0]["type"] != "context"
         ):
             raise ValueError(
-                'The first item in interview_prompts must contain "type": "context".'
+                'The first item in interview_prompts must contain "type": "context" to provide context for the experiment/interview.'
             )
 
         # Check if the length of the interview would exceed the maximum conversation length
         if (
-            len(interview_prompts) * self.num_agents_per_session
+            len(interview_prompts) * len(self.agent_roles)
             > self.max_conversation_length
         ):
             raise ValueError(
-                f"Based on the length of the interview script ({len(interview_prompts)}) and number of agents ({self.num_agents_per_session}), the maximum length of the conversation should be larger or equal to {len(interview_prompts) * self.num_agents_per_session} and not {self.max_conversation_length}."
+                f"Based on the length of the interview script ({len(interview_prompts)}) and total number of special and user-defined agents ({len(self.agent_roles)}), the maximum length of the conversation should be larger or equal to {len(interview_prompts) * len(self.agent_roles)} and not {self.max_conversation_length}."
             )
 
         unique_var_names = []
@@ -1296,13 +1282,13 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
             else:
                 unique_var_names.append(prompt_dict["var_name"])
 
-            # Check if the randomized_response_order column contains only approved values (0 or 1)
-            if str(prompt_dict["randomized_response_order"]) not in ["0", "1"]:
+            # Check if the randomize_response_order column contains only approved values (0 or 1)
+            if str(prompt_dict["randomize_response_order"]) not in ["0", "1"]:
                 raise ValueError(
-                    f"Task ID {prompt_dict['task_id']} contains an invalid value in randomized_response_order field: {prompt_dict['randomized_response_order']}. Supported options include: 0 or 1."
+                    f"Task ID {prompt_dict['task_id']} contains an invalid value in randomize_response_order field: {prompt_dict['randomize_response_order']}. Supported options include: 0 or 1."
                 )
-            prompt_dict["randomized_response_order"] = str(
-                prompt_dict["randomized_response_order"]
+            prompt_dict["randomize_response_order"] = str(
+                prompt_dict["randomize_response_order"]
             )
 
             # Check if the validate_response column contains only approved values (0 or 1)
@@ -1362,7 +1348,9 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
             "experiment_id": f"{self.experiment_id}_{version}",
             "sessions": {},
         }
-        self.experiment_context = self.interview_prompts.pop(0)["llm_text"]
+        self.experiment_context = self.interview_prompts.pop(0)["llm_text"][
+            "Facilitator"
+        ]
 
         # Helper function to process a single session.
         def process_session(session_id: Any) -> tuple[Any, dict]:
@@ -1448,8 +1436,8 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
             profile_info={},
             model_info=self.model_info,
             api_endpoint=self.api_endpoint,
-            role=agent_role,
-            role_description=self.agent_roles[agent_role],
+            role="Facilitator",
+            role_description=self.agent_roles["Facilitator"],
             treatment=session_info["treatment"],
         )
 
@@ -1542,7 +1530,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
         random.seed(self.random_seed)
         # If response_options is a range, format it as "from X to Y"
         if isinstance(response_options, range):
-            return f"Answer with values ranging from {response_options.start} to {response_options.stop - 1}:"
+            return f"Respond with only one numerical value ranging from {response_options.start} to {response_options.stop - 1} (inclusive):"
 
         # If it's a list, join the elements with commas.
         elif isinstance(response_options, list):
@@ -1558,11 +1546,11 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                     + " or "
                     + str(response_options[-1])
                 )
-            return f"Answer with {formatted}:"
+            return f"Respond with only one option from {formatted}:"
 
         # Otherwise, fallback to a simple string conversion.
         else:
-            return f"Answer with {str(response_options)}:"
+            return f"Respond with only one option from {str(response_options)}:"
 
     def _run_session(
         self,
@@ -1590,6 +1578,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
         message_history.append(message_dict)
         if test_mode:
             print(message_dict)
+            print()
 
         if interview_prompts:
             # Sort the order of tasks based on the task_order field. If task order is repeated, then it is expected that the task order are randomised
@@ -1600,13 +1589,23 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                 if round["type"] in ["context", "discussion"]:
                     # Format context/discussion question
                     response = round["llm_text"]["Facilitator"]
-                    response = response.replace(
-                        "{{response_options}}",
-                        self._format_response_options(
-                            response_options=round["response_options"]["Facilitator"],
-                            randomize_response_order=round["randomized_response_order"],
-                        ),
-                    )
+                    if "{response_options}" in response:
+                        try:
+                            response = response.replace(
+                                "{response_options}",
+                                self._format_response_options(
+                                    response_options=round["response_options"][
+                                        "Facilitator"
+                                    ],
+                                    randomize_response_order=round[
+                                        "randomize_response_order"
+                                    ],
+                                ),
+                            )
+                        except KeyError:
+                            raise ValueError(
+                                f"KeyError: The key '{agent_role}' was not found in the response_options dictionary for task ID {round.get('task_id', None)}."
+                            )
 
                     message_dict = {
                         "Facilitator": response,
@@ -1629,7 +1628,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
 
                         message_dict = {
                             agent_role: response,
-                            "agent_id": agent.profile_info["ID"],
+                            "agent_id": agent.profile_info.get("ID", ""),
                             "task_id": round.get("task_id", None),
                             "var_name": round.get("var_name", None),
                         }
@@ -1640,17 +1639,25 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
 
                 elif round["type"] == "question":
                     # Facilitator is posing the same question to each subject.
-                    for agent_role, question in session_info["llm_text"].items():
+                    for agent_role, question in round["llm_text"].items():
                         # Format interview question
-                        question = question.replace(
-                            "{{response_options}}",
-                            self._format_response_options(
-                                response_options=round["response_options"][agent_role],
-                                randomize_response_order=round[
-                                    "randomized_response_order"
-                                ],
-                            ),
-                        )
+                        if "{response_options}" in question:
+                            try:
+                                question = question.replace(
+                                    "{response_options}",
+                                    self._format_response_options(
+                                        response_options=round["response_options"][
+                                            agent_role
+                                        ],
+                                        randomize_response_order=round[
+                                            "randomize_response_order"
+                                        ],
+                                    ),
+                                )
+                            except KeyError:
+                                raise ValueError(
+                                    f"KeyError: The key '{agent_role}' was not found in the response_options dictionary for task ID {round.get('task_id', None)}."
+                                )
 
                         message_dict = {
                             "Facilitator": question,
@@ -1666,7 +1673,9 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                         response = agent.respond(
                             message_history=message_history,
                             validate_response=round["validate_response"],
-                            response_options=round["response_options"][agent_role],
+                            response_options=round["response_options"].get(
+                                agent_role, []
+                            ),
                             generate_speculation_score=round[
                                 "generate_speculation_score"
                             ],
@@ -1674,7 +1683,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
 
                         message_dict = {
                             agent_role: response,
-                            "agent_id": agent.profile_info["ID"],
+                            "agent_id": agent.profile_info.get("ID", ""),
                             "task_id": round.get("task_id", None),
                             "var_name": round.get("var_name", None),
                         }
@@ -1695,7 +1704,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
             ):
                 message_dict = {
                     agent_role: response,
-                    "agent_id": agent.profile_info["ID"],
+                    "agent_id": agent.profile_info.get("ID", ""),
                     "task_id": conversation_length,
                 }
                 message_history.append(message_dict)
@@ -1714,7 +1723,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
 
             message_dict = {
                 agent_role: response,
-                "agent_id": agent.profile_info["ID"],
+                "agent_id": agent.profile_info.get("ID", ""),
                 "task_id": conversation_length,
             }
             message_history.append(message_dict)

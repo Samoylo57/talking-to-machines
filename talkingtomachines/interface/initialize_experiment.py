@@ -133,4 +133,4 @@ def initialize_experiment(prompt_template_dict: dict) -> list:
 
         experiments.append(experiment)
 
-    return experiments
+    return experiments, constant_permutations

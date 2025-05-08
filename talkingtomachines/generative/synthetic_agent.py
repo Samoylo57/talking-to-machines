@@ -238,14 +238,14 @@ class ConversationalSyntheticAgent(SyntheticAgent):
         ]
 
         for message in message_history:
-            role = message.keys()[0]
-            role_response = message.values()[0]
+            role = list(message.keys())[0]
+            role_response = list(message.values())[0]
 
             if role == "system":
                 continue
 
             elif role == self.role:
-                formatted_message_history.apppend(
+                formatted_message_history.append(
                     {"role": "assistant", "content": role_response}
                 )
 
@@ -330,7 +330,7 @@ class ConversationalSyntheticAgent(SyntheticAgent):
                         model_info=self.model_info,
                         message_history=self.message_history,
                     )
-                    if self._validate_response(
+                    if response_options and self._validate_response(
                         response=response, response_options=response_options
                     ):
                         break

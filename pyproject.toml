@@ -43,7 +43,7 @@ Homepage = "https://github.com/talking-to-machines/talking-to-machines"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["talkingtomachines*"]  # the real library & its subpackages
-exclude = ["demos*", "storage*"]  # examples / data folders, not code
+exclude = ["demos*", "storage*", "experiment_results*"]  # examples / data folders, not code
 
 [project.scripts]
 talkingtomachines = "talkingtomachines.cli:main"

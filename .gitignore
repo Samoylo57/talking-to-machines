@@ -162,6 +162,7 @@ cython_debug/
 #.idea/
 
 storage/experiment/
+experiment_results/
 dist/
 build/
 *.egg-info/

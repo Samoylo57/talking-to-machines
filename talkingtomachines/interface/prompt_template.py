@@ -143,7 +143,13 @@ def parse_text_field(
     """
     # Create list of user-defined agents, excluding the special ones
     user_defined_agents = [agent for agent in agent_list if agent not in SPECIAL_ROLES]
-    stripped_text = text_field.strip()
+    if isinstance(text_field, str):
+        stripped_text = text_field.strip()
+    else:
+        try:
+            stripped_text = str(text_field).strip()
+        except Exception as e:
+            stripped_text = ""
 
     if prompt_type == "question":
         # If the text starts with "{" and ends with "}", assume it's a dictionary literal.
@@ -169,6 +175,29 @@ def parse_text_field(
         raise ValueError(
             f"Invalid prompt type: {prompt_type} in Task ID {task_id}: Supported prompt types include: {SUPPORTED_PROMPT_TYPES}"
         )
+
+
+def parse_range_response_options(response_options: dict) -> dict:
+    """Parses a dictionary of response options, converting any tuple values into a range object.
+
+    Args:
+        response_options (dict): A dictionary where keys represent roles and values are either
+                                 tuples (to be converted into range objects) or other types
+                                 (which are left unchanged).
+
+    Returns:
+        dict: A dictionary with the same keys as the input, where tuple values are replaced
+              with range objects, and other values remain unchanged.
+    """
+    parsed_response_options = {
+        role: (
+            range(*response_option)
+            if isinstance(response_option, tuple)
+            else response_option
+        )
+        for role, response_option in response_options.items()
+    }
+    return parsed_response_options
 
 
 def extract_prompts(file_path: str, sheet_name: str, agent_list: list) -> dict:
@@ -225,6 +254,9 @@ def extract_prompts(file_path: str, sheet_name: str, agent_list: list) -> dict:
             agent_list=agent_list,
             task_id=prompt_dict["task_id"],
             prompt_type=prompt_dict["type"],
+        )
+        prompt_dict["response_options"] = parse_range_response_options(
+            prompt_dict["response_options"]
         )
 
     return {"interview_prompts": prompts_list}
@@ -297,7 +329,9 @@ def extract_agent_profiles(file_path: str, sheet_name: str) -> dict:
     }
 
 
-def print_experimental_settings(experiment: AItoAIInterviewExperiment) -> None:
+def print_experimental_settings(
+    experiment: AItoAIInterviewExperiment, constant_permutation: dict
+) -> None:
     """Prints the experimental settings for a given AI to AI interview experiment.
 
     Args:
@@ -311,8 +345,7 @@ def print_experimental_settings(experiment: AItoAIInterviewExperiment) -> None:
         Open AI API Key: {openai_api_key}
         HuggingFace API Key: {hf_api_key}
         API Endpoint (only valid when using HuggingFace Models): {api_endpoint}
-        Agent Roles: {agent_roles}
-        Number of Agents per Session (Including Interviewer): {num_agents_per_session}
+        Number of Agents per Session (Excluding Special Roles like Facilitator and Summarizer): {num_agents_per_session}
         Number of Sessions: {num_sessions}
         Maximum Conversation Length: {max_conversation_length}
         Treatments: {treatments}
@@ -323,6 +356,8 @@ def print_experimental_settings(experiment: AItoAIInterviewExperiment) -> None:
         Role Assignment Strategy: {role_assignment_strategy}
         Role Column (Only valid when using manual assignment strategy): {role_column}
         Random Seed: {random_seed}
+        Constant Permutation: {constant_permutation}
+        Agent Roles: {agent_roles}
         Interview Prompts: {interview_prompts}
 
         """.format(
@@ -332,7 +367,6 @@ def print_experimental_settings(experiment: AItoAIInterviewExperiment) -> None:
             openai_api_key=DevelopmentConfig.OPENAI_API_KEY,
             hf_api_key=DevelopmentConfig.HF_API_KEY,
             api_endpoint=experiment.api_endpoint,
-            agent_roles=experiment.agent_roles,
             num_agents_per_session=experiment.num_agents_per_session,
             num_sessions=experiment.num_sessions,
             max_conversation_length=experiment.max_conversation_length,
@@ -344,6 +378,8 @@ def print_experimental_settings(experiment: AItoAIInterviewExperiment) -> None:
             role_assignment_strategy=experiment.role_assignment_strategy,
             role_column=experiment.role_column,
             random_seed=experiment.random_seed,
+            constant_permutation=constant_permutation,
+            agent_roles=experiment.agent_roles,
             interview_prompts=experiment.interview_prompts,
         )
     )
@@ -370,7 +406,7 @@ def run_experiment_wrapper(args: tuple) -> None:
 def main():
     # Set up command-line argument parsing
     parser = argparse.ArgumentParser(
-        description="Parse the prompt template provided by the user and initialise the experiment in the Talking to Machines platform."
+        description="Parse the prompt template provided by the user and initialise the experiment in the Talking to Machines Platform."
     )
     parser.add_argument(
         "prompt_template_file_path",
@@ -381,8 +417,9 @@ def main():
     parser.add_argument(
         "test_mode",
         type=str,
-        default="",
-        help="Boolean indicating whether the experiment will be run in test mode. If this argument is not provided, the experiment will default to test mode.",
+        nargs="?",
+        default="True",
+        help="Bootlean indicating whether the experiment will be run in test mode. If this argument is not provided, the experiment will default to test mode.",
     )
     args = parser.parse_args()
     prompt_template_file_path = args.prompt_template_file_path
@@ -428,9 +465,12 @@ def main():
         elif sheet_name == "interview_prompts":
             prompt_template_dict.update(
                 extract_prompts(
-                    file_path=prompt_template_file_path, sheet_name=sheet_name
+                    file_path=prompt_template_file_path,
+                    sheet_name=sheet_name,
+                    agent_list=list(prompt_template_dict["agent_roles"].keys()),
                 )
             )
+
         elif sheet_name == "agent_profiles":
             prompt_template_dict.update(
                 extract_agent_profiles(
@@ -449,11 +489,13 @@ def main():
             )
 
     # Initialize experiment based on prompt template
-    experiment_list = initialize_experiment(prompt_template_dict=prompt_template_dict)
+    experiment_list, constant_permutations = initialize_experiment(
+        prompt_template_dict=prompt_template_dict
+    )
 
     # Print out experiment settings for user verification
-    for experiment in experiment_list:
-        print_experimental_settings(experiment)
+    for experiment, constant_permutation in zip(experiment_list, constant_permutations):
+        print_experimental_settings(experiment, constant_permutation)
 
     # Ask for user confirmation to run experiment
     user_input = (
@@ -465,22 +507,36 @@ def main():
     )
     if user_input == "y":
         print("Experiment has started.")
-        # Prepare a list of arguments for each experiment
-        experiment_args = [
-            (experiment, test_mode, idx + 1)
-            for idx, experiment in enumerate(experiment_list)
-        ]
 
-        # Run experiments in parallel using ProcessPoolExecutor
-        with concurrent.futures.ProcessPoolExecutor() as executor:
-            # Submit all experiments
-            futures = [
-                executor.submit(run_experiment_wrapper, arg) for arg in experiment_args
+        if test_mode:
+            experiment_version = 1
+            for experiment in tqdm(experiment_list):
+                experiment.run_experiment(
+                    test_mode=test_mode,
+                    version=experiment_version,
+                    save_results_as_csv=True,
+                )
+                experiment_version += 1
+        else:
+            # Prepare a list of arguments for each experiment
+            experiment_args = [
+                (experiment, test_mode, idx + 1)
+                for idx, experiment in enumerate(experiment_list)
             ]
 
-            # Update progress bar as each experiment completes
-            for _ in tqdm(concurrent.futures.as_completed(futures), total=len(futures)):
-                pass
+            # Run experiments in parallel using ProcessPoolExecutor
+            with concurrent.futures.ProcessPoolExecutor() as executor:
+                # Submit all experiments
+                futures = [
+                    executor.submit(run_experiment_wrapper, arg)
+                    for arg in experiment_args
+                ]
+
+                # Update progress bar as each experiment completes
+                for _ in tqdm(
+                    concurrent.futures.as_completed(futures), total=len(futures)
+                ):
+                    pass
         print("Experiment is completed successfully.")
 
     else:
