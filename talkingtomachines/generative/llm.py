@@ -3,7 +3,6 @@ import warnings
 import json
 import openai
 from typing import List, Any
-from openai import OpenAI
 
 RETRY_DELAY = 300
 MAX_RETRIES = 5
@@ -75,7 +74,7 @@ def query_open_ai(
     """Query OpenAI API with the provided prompt.
 
     Args:
-        llm_client (openai.OpenAI): The LLM client from OpenAI class.
+        llm_client (openai.OpenAI): The LLM client.
         model_info (str): Information about the model.
         message_history (List[dict]): Contains the history of message exchanged between user and assistant.
         temperature (float): The model temperature setting for the LLM.
@@ -118,7 +117,6 @@ def query_hugging_face(
     Args:
         llm_client (openai.OpenAI): The LLM client from OpenAI class.
         message_history (List[dict]): Contains the history of message exchanged between user and assistant.
-        api_endpoint (str, optional): API endpoint to the LLM that is hosted externally.
         temperature (float): The model temperature setting for the LLM.
 
     Returns:
