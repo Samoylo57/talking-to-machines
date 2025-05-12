@@ -20,10 +20,10 @@ talkingtomachines.interface.chat module
    :undoc-members:
    :show-inheritance:
 
-talkingtomachines.interface.create\_experiment module
------------------------------------------------------
+talkingtomachines.interface.initialize\_experiment module
+---------------------------------------------------------
 
-.. automodule:: talkingtomachines.interface.create_experiment
+.. automodule:: talkingtomachines.interface.initialize_experiment
    :members:
    :undoc-members:
    :show-inheritance:
@@ -52,10 +52,26 @@ talkingtomachines.interface.playground module
    :undoc-members:
    :show-inheritance:
 
+talkingtomachines.interface.prompt\_template module
+---------------------------------------------------
+
+.. automodule:: talkingtomachines.interface.prompt_template
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 talkingtomachines.interface.synthetic\_agent module
 ---------------------------------------------------
 
 .. automodule:: talkingtomachines.interface.synthetic_agent
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+talkingtomachines.interface.validate\_template module
+-----------------------------------------------------
+
+.. automodule:: talkingtomachines.interface.validate_template
    :members:
    :undoc-members:
    :show-inheritance:

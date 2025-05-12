@@ -1,3 +1,5 @@
+.. orphan
+
 talkingtomachines package
 =========================
 
@@ -16,18 +18,18 @@ Subpackages
 Submodules
 ----------
 
-talkingtomachines.config module
--------------------------------
+talkingtomachines.cli module
+----------------------------
 
-.. automodule:: talkingtomachines.config
+.. automodule:: talkingtomachines.cli
    :members:
    :undoc-members:
    :show-inheritance:
 
-talkingtomachines.main module
------------------------------
+talkingtomachines.config module
+-------------------------------
 
-.. automodule:: talkingtomachines.main
+.. automodule:: talkingtomachines.config
    :members:
    :undoc-members:
    :show-inheritance:
