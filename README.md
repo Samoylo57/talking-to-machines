@@ -1,4 +1,4 @@
-# Talking To Machines
+# talkingtomachines
 
 This repository contains the source code for the Talking to Machines package.
 

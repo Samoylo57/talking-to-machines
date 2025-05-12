@@ -1,16 +1,17 @@
 import os
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 
-load_dotenv()
+load_dotenv(find_dotenv(), override=False)
 
 
 class Config:
     DEBUG = False
     TESTING = False
-    DATABASE_URI = os.getenv("DATABASE_URI", "sqlite:///:memory:")
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "openai_api_key")
-    QUALTRICS_API_KEY = os.getenv("QUALTRICS_API_KEY", "your_qualtrics_api_key")
-    OTREE_API_KEY = os.getenv("OTREE_API_KEY", "your_otree_api_key")
+    DATABASE_URI = os.getenv("DATABASE_URI", "")
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+    QUALTRICS_API_KEY = os.getenv("QUALTRICS_API_KEY", "")
+    OTREE_API_KEY = os.getenv("OTREE_API_KEY", "")
+    HF_API_KEY = os.getenv("HF_API_KEY", "")
 
 
 class DevelopmentConfig(Config):
