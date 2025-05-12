@@ -40,8 +40,6 @@ SUPPORTED_TREATMENT_ASSIGNMENT_STRATEGIES = [
     "simple_random",
     "complete_random",
     # "full_factorial",
-    # "block_randomisation",
-    # "cluster_randomisation",
     "manual",
 ]
 SUPPORTED_SESSION_ASSIGNMENT_STRATEGIES = [
@@ -55,7 +53,8 @@ SUPPORTED_ROLE_ASSIGNMENT_STRATEGIES = [
 SPECIAL_ROLES = ["Facilitator", "Summarizer"]
 SUPPORTED_PROMPT_TYPES = [
     "context",
-    "question",
+    "public_question",
+    "private_question",
     "discussion",
 ]
 
@@ -96,6 +95,7 @@ class AIConversationalExperiment(Experiment):
 
     Args:
         model_info (str): The information about the AI model used in the experiment.
+        temperature (float): The temperature setting that will be applied to the LLM.
         agent_profiles (pd.DataFrame): The profile information of the agents participating in the experiment.
         experiment_context (str, optional): The context or purpose of the experiment. Defaults to an empty string
         experiment_id (str, optional): The unique ID of the experiment. Defaults to an empty string.
@@ -112,6 +112,7 @@ class AIConversationalExperiment(Experiment):
 
     Raises:
         ValueError: If the provided model_info is not supported.
+        ValueError: If the provided temperature information is not supported.
         ValueError: If the provided treatment_assignment_strategy is not supported.
         ValueError: If the provided session_assignment_strategy is not supported.
         ValueError: If the provided role_assignment_strategy is not supported.
@@ -121,6 +122,7 @@ class AIConversationalExperiment(Experiment):
 
     Attributes:
         model_info (str): The information about the AI model used in the experiment.
+        temperature (float): The temperature setting that will be applied to the LLM.
         agent_profiles (pd.DataFrame): The profile information of the agents participating in the experiment.
         experiment_context (str): The context or purpose of the experiment.
         experiment_id (str): The unique ID of the experiment.
@@ -139,6 +141,7 @@ class AIConversationalExperiment(Experiment):
     def __init__(
         self,
         model_info: str,
+        temperature: float,
         agent_profiles: pd.DataFrame,
         experiment_context: str = "",
         experiment_id: str = "",
@@ -158,6 +161,7 @@ class AIConversationalExperiment(Experiment):
         )
 
         self.model_info = self._check_model_info(model_info=model_info)
+        self.temperature = self._check_temperature(temperature=temperature)
         self.experiment_context = experiment_context
         self.agent_profiles = self._check_agent_profiles(agent_profiles=agent_profiles)
         self.api_endpoint = api_endpoint
@@ -199,6 +203,40 @@ class AIConversationalExperiment(Experiment):
             )
 
         return model_info
+
+    def _check_temperature(self, temperature: float) -> float:
+        """Validates and adjusts the provided temperature value.
+        This method ensures that the temperature is a numeric value (either an integer or a float).
+        If the temperature is below 0, it issues a warning and sets the temperature to 0.0.
+        If the temperature is above 2, it issues a warning and sets the temperature to 2.0.
+        Otherwise, it returns the provided temperature as a float.
+
+        Args:
+            temperature (float): The temperature value to validate and adjust.
+
+        Returns:
+            float: The validated and adjusted temperature value.
+        """
+        # Ensure that temperature is a number (float or int)
+        if not isinstance(temperature, (int, float)):
+            raise ValueError("The temperature field must be a float or integer value.")
+
+        # If temperature is below 0, warn and set to 0
+        if temperature < 0:
+            warnings.warn(
+                f"Provided temperature {temperature} is below 0. Setting temperature to 0..."
+            )
+            return 0.0
+
+        # If temperature is above 2, warn and set to 2
+        if temperature > 2:
+            warnings.warn(
+                f"Provided temperature {temperature} is greater than 2. Setting temperature to 2..."
+            )
+            return 2.0
+
+        # Otherwise, return the provided temperature as a float
+        return float(temperature)
 
     def _check_agent_profiles(self, agent_profiles: pd.DataFrame) -> pd.DataFrame:
         """Checks to ensure that provided agent_profiles is not empty and contains a ID column.
@@ -369,6 +407,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
 
     Args:
         model_info (str): The information about the AI model used in the experiment.
+        temperature (float): The temperature setting that will be applied to the LLM.
         agent_profiles (pd.DataFrame): The profile information of the agents participating in the experiment.
         agent_roles (dict[str, str]): Dictionary mapping agent roles to their descriptions.
         num_agents_per_session (int, optional): Number of agents per session. Defaults to 2.
@@ -388,6 +427,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
 
     Raises:
         ValueError: If the provided model_info is not supported.
+        ValueError: If the provided temperature information is not supported.
         ValueError: If the provided treatment_assignment_strategy is not supported.
         ValueError: If the provided session_assignment_strategy is not supported.
         ValueError: If the provided role_assignment_strategy is not supported.
@@ -401,6 +441,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
 
     Attributes:
         model_info (str): The information about the AI model used in the experiment.
+        temperature (float): The temperature setting that will be applied to the LLM.
         agent_profiles (pd.DataFrame): The profile information of the agents participating in the experiment.
         agent_roles (dict[str, str]): The roles assigned to agents.
         num_agents_per_session (int): The number of agents per session.
@@ -426,6 +467,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
     def __init__(
         self,
         model_info: str,
+        temperature: float,
         agent_profiles: pd.DataFrame,
         agent_roles: dict[str, str],
         num_agents_per_session: int = 2,
@@ -445,6 +487,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
     ):
         super().__init__(
             model_info,
+            temperature,
             agent_profiles,
             experiment_context,
             experiment_id,
@@ -752,6 +795,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
         def process_session(session_id: Any) -> tuple[Any, dict]:
             session_info = {}
             session_info["session_id"] = session_id
+            session_info["random_seed"] = self.random_seed
             session_info["treatment"] = self.treatments[
                 self.treatment_assignment[session_id]
             ]
@@ -761,6 +805,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
                     treatment=session_info["treatment"],
                 )
             )
+            session_info["experiment_context"] = self.experiment_context
             session_info["agent_profiles"] = self.session_assignment[session_id]
             session_participant_ids = [
                 profile["ID"] for profile in session_info["agent_profiles"]
@@ -829,6 +874,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
                 session_id=session_info["session_id"],
                 profile_info=session_info["agent_profiles"][i],
                 model_info=self.model_info,
+                temperature=self.temperature,
                 api_endpoint=self.api_endpoint,
                 role=agent_role,
                 role_description=self.agent_roles[agent_role],
@@ -930,6 +976,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
 
     Args:
         model_info (str): The information about the AI model used in the experiment.
+        temperature (float): The temperature setting that will be applied to the LLM.
         agent_profiles (pd.DataFrame): The profile information of the agents participating in the experiment.
         agent_roles (dict[str, str]): Dictionary mapping agent roles to their descriptions.
         num_agents_per_session (int, optional): Number of agents per session. Defaults to 2.
@@ -950,6 +997,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
 
     Raises:
         ValueError: If the provided model_info is not supported.
+        ValueError: If the provided temperature information is not supported.
         ValueError: If the provided treatment_assignment_strategy is not supported.
         ValueError: If the provided session_assignment_strategy is not supported.
         ValueError: If the provided role_assignment_strategy is not supported.
@@ -964,6 +1012,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
 
     Attributes:
         model_info (str): The information about the AI model used in the experiment.
+        temperature (float): The temperature setting that will be applied to the LLM.
         agent_profiles (pd.DataFrame): The profile information of the agents participating in the experiment.
         agent_roles (dict[str, str]): The roles assigned to agents.
         num_agents_per_session (int): The number of agents per session.
@@ -990,6 +1039,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
     def __init__(
         self,
         model_info: str,
+        temperature: float,
         agent_profiles: pd.DataFrame,
         agent_roles: dict[str, str],
         num_agents_per_session: int = 2,
@@ -1010,6 +1060,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
     ):
         super().__init__(
             model_info,
+            temperature,
             agent_profiles,
             agent_roles,
             num_agents_per_session,
@@ -1243,6 +1294,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                 - The "randomize_response_order" field contains only approved values (0 or 1).
                 - The "validate_response" field contains only approved values (0 or 1).
                 - The "generate_speculation_score" field contains only approved values (0 or 1).
+                - The "format_response" field contains only approved values (0 or 1).
         """
         # Check if interview_prompts is not an empty list
         if not interview_prompts:
@@ -1306,6 +1358,13 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
             prompt_dict["generate_speculation_score"] = str(
                 prompt_dict["generate_speculation_score"]
             )
+
+            # Check if the format_response column contains only approved values (0 or 1)
+            if str(prompt_dict["format_response"]) not in ["0", "1"]:
+                raise ValueError(
+                    f"Task ID {prompt_dict['task_id']} contains an invalid value in format_response field: {prompt_dict['format_response']}. Supported options include: 0 or 1."
+                )
+            prompt_dict["format_response"] = str(prompt_dict["format_response"])
 
         return interview_prompts
 
@@ -1435,6 +1494,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
             session_id=session_info["session_id"],
             profile_info={},
             model_info=self.model_info,
+            temperature=self.temperature,
             api_endpoint=self.api_endpoint,
             role="Facilitator",
             role_description=self.agent_roles["Facilitator"],
@@ -1458,6 +1518,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                 session_id=session_info["session_id"],
                 profile_info=session_info["agent_profiles"][i],
                 model_info=self.model_info,
+                temperature=self.temperature,
                 api_endpoint=self.api_endpoint,
                 role=agent_role,
                 role_description=self.agent_roles[agent_role],
@@ -1472,6 +1533,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                 session_id=session_info["session_id"],
                 profile_info={},
                 model_info=self.model_info,
+                temperature=self.temperature,
                 api_endpoint=self.api_endpoint,
                 role="Summarizer",
                 role_description=self.agent_roles["Summarizer"],
@@ -1530,7 +1592,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
         random.seed(self.random_seed)
         # If response_options is a range, format it as "from X to Y"
         if isinstance(response_options, range):
-            return f"Respond with only one numerical value ranging from {response_options.start} to {response_options.stop - 1} (inclusive):"
+            return f"Respond with a numerical value ranging from {response_options.start} to {response_options.stop} (inclusive):"
 
         # If it's a list, join the elements with commas.
         elif isinstance(response_options, list):
@@ -1542,15 +1604,15 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                 if randomize_response_order:
                     random.shuffle(response_options)
                 formatted = (
-                    ", ".join(str(opt) for opt in response_options[:-1])
+                    ", ".join(f"'{opt}'" for opt in response_options[:-1])
                     + " or "
                     + str(response_options[-1])
                 )
-            return f"Respond with only one option from {formatted}:"
+            return f"Respond with one option from {formatted}:"
 
         # Otherwise, fallback to a simple string conversion.
         else:
-            return f"Respond with only one option from {str(response_options)}:"
+            return str(response_options)
 
     def _run_session(
         self,
@@ -1569,9 +1631,6 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
             dict[str, Any]: A dictionary containing the updated session information at the end of the session.
         """
         message_history = []
-        conversation_length = 0
-        num_agents = len(session_info["agents"])
-        agent_list = list(session_info["agents"].values())
         response = session_info["session_system_message"]
         agent_role = "system"
         message_dict = {agent_role: response}
@@ -1580,35 +1639,53 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
             print(message_dict)
             print()
 
-        if interview_prompts:
-            # Sort the order of tasks based on the task_order field. If task order is repeated, then it is expected that the task order are randomised
-            interview_prompts = self._sort_tasks(interview_prompts)
+        # Sort the order of tasks based on the task_order field. If task order is repeated, then it is expected that the task order are randomised
+        interview_prompts = self._sort_tasks(interview_prompts)
 
-            for round in interview_prompts:
-                # Facilitator is providing instructions at the beginning to all subjects and allowing the subjects to continue the discussion.
-                if round["type"] in ["context", "discussion"]:
-                    # Format context/discussion question
-                    response = round["llm_text"]["Facilitator"]
-                    if "{response_options}" in response:
-                        try:
-                            response = response.replace(
-                                "{response_options}",
-                                self._format_response_options(
-                                    response_options=round["response_options"][
-                                        "Facilitator"
-                                    ],
-                                    randomize_response_order=round[
-                                        "randomize_response_order"
-                                    ],
-                                ),
-                            )
-                        except KeyError:
-                            raise ValueError(
-                                f"KeyError: The key '{agent_role}' was not found in the response_options dictionary for task ID {round.get('task_id', None)}."
-                            )
+        for round in interview_prompts:
+            # Facilitator is providing instructions at the beginning to all subjects and allowing the subjects to continue the discussion.
+            if round["type"] in ["context", "discussion"]:
+                # Format context/discussion question
+                response = round["llm_text"]["Facilitator"]
+                if "{response_options}" in response:
+                    try:
+                        response = response.replace(
+                            "{response_options}",
+                            self._format_response_options(
+                                response_options=round["response_options"][
+                                    "Facilitator"
+                                ],
+                                randomize_response_order=round[
+                                    "randomize_response_order"
+                                ],
+                            ),
+                        )
+                    except KeyError:
+                        raise KeyError(
+                            f"The role 'Facilitator' was not found in the response_options dictionary for task ID {round.get('task_id', None)}."
+                        )
+
+                message_dict = {
+                    "Facilitator": response,
+                    "task_id": round.get("task_id", None),
+                    "var_name": round.get("var_name", None),
+                }
+                message_history.append(message_dict)
+                if test_mode:
+                    print(message_dict)
+                    print()
+
+                # Loop through each agent back-to-back and get their response
+                for agent_role, agent in session_info["agents"].items():
+                    response = agent.respond(
+                        message_history=message_history,
+                        generate_speculation_score=round["generate_speculation_score"],
+                        format_response=round["format_response"],
+                    )
 
                     message_dict = {
-                        "Facilitator": response,
+                        agent_role: response,
+                        "agent_id": agent.profile_info.get("ID", ""),
                         "task_id": round.get("task_id", None),
                         "var_name": round.get("var_name", None),
                     }
@@ -1617,119 +1694,117 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                         print(message_dict)
                         print()
 
-                    # Loop through each agent and get their response
-                    for agent_role, agent in session_info["agents"].items():
-                        response = agent.respond(
-                            message_history=message_history,
-                            generate_speculation_score=round[
-                                "generate_speculation_score"
-                            ],
-                        )
+            elif round["type"] == "public_question":
+                # Facilitator is posing the same question to each subject and the subjects' responses are shown to all subjects during the round.
+                for agent_role, question in round["llm_text"].items():
+                    # Format interview question
+                    if "{response_options}" in question:
+                        try:
+                            question = question.replace(
+                                "{response_options}",
+                                self._format_response_options(
+                                    response_options=round["response_options"][
+                                        agent_role
+                                    ],
+                                    randomize_response_order=round[
+                                        "randomize_response_order"
+                                    ],
+                                ),
+                            )
+                        except KeyError:
+                            raise ValueError(
+                                f"KeyError: The role '{agent_role}' was not found in the response_options dictionary for task ID {round.get('task_id', None)}."
+                            )
 
-                        message_dict = {
-                            agent_role: response,
-                            "agent_id": agent.profile_info.get("ID", ""),
-                            "task_id": round.get("task_id", None),
-                            "var_name": round.get("var_name", None),
-                        }
-                        message_history.append(message_dict)
-                        if test_mode:
-                            print(message_dict)
-                            print()
+                    message_dict = {
+                        "Facilitator": question,
+                        "task_id": round.get("task_id", None),
+                        "var_name": round.get("var_name", None),
+                    }
+                    message_history.append(message_dict)
+                    if test_mode:
+                        print(message_dict)
+                        print()
 
-                elif round["type"] == "question":
-                    # Facilitator is posing the same question to each subject.
-                    for agent_role, question in round["llm_text"].items():
-                        # Format interview question
-                        if "{response_options}" in question:
-                            try:
-                                question = question.replace(
-                                    "{response_options}",
-                                    self._format_response_options(
-                                        response_options=round["response_options"][
-                                            agent_role
-                                        ],
-                                        randomize_response_order=round[
-                                            "randomize_response_order"
-                                        ],
-                                    ),
-                                )
-                            except KeyError:
-                                raise ValueError(
-                                    f"KeyError: The key '{agent_role}' was not found in the response_options dictionary for task ID {round.get('task_id', None)}."
-                                )
-
-                        message_dict = {
-                            "Facilitator": question,
-                            "task_id": round.get("task_id", None),
-                            "var_name": round.get("var_name", None),
-                        }
-                        message_history.append(message_dict)
-                        if test_mode:
-                            print(message_dict)
-                            print()
-
-                        agent = session_info["agents"][agent_role]
-                        response = agent.respond(
-                            message_history=message_history,
-                            validate_response=round["validate_response"],
-                            response_options=round["response_options"].get(
-                                agent_role, []
-                            ),
-                            generate_speculation_score=round[
-                                "generate_speculation_score"
-                            ],
-                        )
-
-                        message_dict = {
-                            agent_role: response,
-                            "agent_id": agent.profile_info.get("ID", ""),
-                            "task_id": round.get("task_id", None),
-                            "var_name": round.get("var_name", None),
-                        }
-                        message_history.append(message_dict)
-                        if test_mode:
-                            print(message_dict)
-                            print()
-
-                else:
-                    raise ValueError(
-                        f"Invalid prompt type: {round['type']}. The type of prompt for each interview round should one of these options: {SUPPORTED_PROMPT_TYPES}"
+                    agent = session_info["agents"][agent_role]
+                    response = agent.respond(
+                        message_history=message_history,
+                        validate_response=round["validate_response"],
+                        response_options=round["response_options"].get(agent_role, []),
+                        generate_speculation_score=round["generate_speculation_score"],
+                        format_response=round["format_response"],
                     )
 
-        else:
-            while (
-                "Thank you for the conversation" not in response
-                and conversation_length < self.max_conversation_length
-            ):
-                message_dict = {
-                    agent_role: response,
-                    "agent_id": agent.profile_info.get("ID", ""),
-                    "task_id": conversation_length,
-                }
-                message_history.append(message_dict)
-                if test_mode:
-                    print(message_dict)
-                    print()
-                # If no interview script is provided, the sequence of conversation will follow the sequence of agents defined in self._initialize_agents
-                agent = agent_list[conversation_length % num_agents]
+                    message_dict = {
+                        agent_role: response,
+                        "agent_id": agent.profile_info.get("ID", ""),
+                        "task_id": round.get("task_id", None),
+                        "var_name": round.get("var_name", None),
+                    }
+                    message_history.append(message_dict)
+                    if test_mode:
+                        print(message_dict)
+                        print()
 
-                if conversation_length == 0:
-                    message_history.append({"user": "Start"})
+            elif round["type"] == "private_question":
+                # Facilitator is posing the same question to each subject but the subjects' responses are not shown to other subjects during the round
+                round_message_history = []
+                for agent_role, question in round["llm_text"].items():
+                    # Format interview question
+                    if "{response_options}" in question:
+                        try:
+                            question = question.replace(
+                                "{response_options}",
+                                self._format_response_options(
+                                    response_options=round["response_options"][
+                                        agent_role
+                                    ],
+                                    randomize_response_order=round[
+                                        "randomize_response_order"
+                                    ],
+                                ),
+                            )
+                        except KeyError:
+                            raise ValueError(
+                                f"KeyError: The role '{agent_role}' was not found in the response_options dictionary for task ID {round.get('task_id', None)}."
+                            )
 
-                response = agent.respond(message_history=message_history)
-                agent_role = agent.role
-                conversation_length += 1
+                    message_dict = {
+                        "Facilitator": question,
+                        "task_id": round.get("task_id", None),
+                        "var_name": round.get("var_name", None),
+                    }
+                    round_message_history.append(message_dict)
+                    if test_mode:
+                        print(message_dict)
+                        print()
 
-            message_dict = {
-                agent_role: response,
-                "agent_id": agent.profile_info.get("ID", ""),
-                "task_id": conversation_length,
-            }
-            message_history.append(message_dict)
-            if test_mode:
-                print(message_dict)
-                print()
+                    agent = session_info["agents"][agent_role]
+                    response = agent.respond(
+                        message_history=message_history + [message_dict],
+                        validate_response=round["validate_response"],
+                        response_options=round["response_options"].get(agent_role, []),
+                        generate_speculation_score=round["generate_speculation_score"],
+                        format_response=round["format_response"],
+                    )
+
+                    message_dict = {
+                        agent_role: response,
+                        "agent_id": agent.profile_info.get("ID", ""),
+                        "task_id": round.get("task_id", None),
+                        "var_name": round.get("var_name", None),
+                    }
+                    round_message_history.append(message_dict)
+                    if test_mode:
+                        print(message_dict)
+                        print()
+
+                message_history.extend(round_message_history)
+
+            else:
+                raise ValueError(
+                    f"Invalid prompt type: {round['type']}. The type of prompt for each interview round should one of these options: {SUPPORTED_PROMPT_TYPES}"
+                )
 
         message_history.append({"system": "End"})
         if test_mode:

@@ -37,6 +37,7 @@ class SyntheticAgent:
         session_id (Any): The ID of the session.
         profile_info (ProfileInfo): The profile information of the user.
         model_info (str): The information about the model used by the agent.
+        temperature (float): The model temperature setting for the agent.
         api_endpoint (str, optional): API endpoint to the LLM model if the model is hosted externally.
         profile_prompt_generator (Callable[[ProfileInfo], str], optional):
             A function that generates a profile prompt based on the profile information.
@@ -49,6 +50,7 @@ class SyntheticAgent:
         profile_info (ProfileInfo): The profile information of the user.
         profile_prompt (str): A prompt string containing the profile information of the user.
         model_info (str): The information about the model used by the agent.
+        temperature (float): The model temperature setting for the agent.
         api_endpoint (str): API endpoint to the LLM model if the model is hosted externally.
         llm_client (OpenAI): The LLM client.
     """
@@ -60,6 +62,7 @@ class SyntheticAgent:
         session_id: Any,
         profile_info: ProfileInfo,
         model_info: str,
+        temperature: float,
         api_endpoint: str = "",
         profile_prompt_generator: Callable[
             [ProfileInfo], str
@@ -71,6 +74,7 @@ class SyntheticAgent:
         self.profile_info = profile_info
         self.profile_prompt = profile_prompt_generator(profile_info)
         self.model_info = model_info
+        self.temperature = temperature
         self.api_endpoint = api_endpoint
         self.llm_client = self._initialise_llm_client()
 
@@ -111,6 +115,7 @@ class SyntheticAgent:
             "profile_info": self.profile_info,
             "profile_prompt": self.profile_prompt,
             "model_info": self.model_info,
+            "temperature": self.temperature,
             "api_endpoint": self.api_endpoint,
         }
 
@@ -137,6 +142,7 @@ class ConversationalSyntheticAgent(SyntheticAgent):
         session_id (Any): The ID of the session.
         profile_info (ProfileInfo): The profile information of the user.
         model_info (str): The information about the model used by the agent.
+        temperature (float): The model temperature setting for the agent.
         api_endpoint (str, optional): API endpoint to the LLM model if the model is hosted externally.
         role (str): The name of the role assigned to the agent.
         role_description (str): The description of the role assigned to the agent.
@@ -152,6 +158,7 @@ class ConversationalSyntheticAgent(SyntheticAgent):
         profile_info (ProfileInfo): The profile information of the user.
         profile_prompt (str): A prompt string containing the profile information of the user.
         model_info (str): The information about the model used by the agent.
+        temperature (float): The model temperature setting for the agent.
         api_endpoint (str): API endpoint to the LLM model if the model is hosted externally.
         role (str): The name of the role assigned to the agent.
         role_description (str): The description of the role assigned to the agent.
@@ -168,6 +175,7 @@ class ConversationalSyntheticAgent(SyntheticAgent):
         session_id: Any,
         profile_info: ProfileInfo,
         model_info: str,
+        temperature: float,
         api_endpoint: str,
         role: str,
         role_description: str,
@@ -182,6 +190,7 @@ class ConversationalSyntheticAgent(SyntheticAgent):
             session_id,
             profile_info,
             model_info,
+            temperature,
             api_endpoint,
             profile_prompt_generator,
         )
@@ -209,6 +218,7 @@ class ConversationalSyntheticAgent(SyntheticAgent):
             "profile_info": self.profile_info,
             "profile_prompt": self.profile_prompt,
             "model_info": self.model_info,
+            "temperature": self.temperature,
             "api_endpoint": self.api_endpoint,
             "role": self.role,
             "role_description": self.role_description,
@@ -233,7 +243,6 @@ class ConversationalSyntheticAgent(SyntheticAgent):
                 prefixed with their role in the content.
         """
         formatted_message_history = [
-            {"role": "system", "content": self.experiment_context},
             {"role": "system", "content": self.system_message},
         ]
 
@@ -256,23 +265,26 @@ class ConversationalSyntheticAgent(SyntheticAgent):
 
         return formatted_message_history
 
-    def _validate_response(self, response: str, response_options: Any) -> bool:
+    def _validate_response(self, response: Any, response_options: Any) -> bool:
         """Validates whether a given response contains any of the valid response options as whole words.
 
         Args:
-            response (str): The response string to validate.
-            response_options (Any): The valid response options. Can be a range, a list, or a single value.
+            response (Any): The response to validate. This could be a string or a JSON dictionary
+            response_options (Any): The valid response options. Can be a range, a list, or a string value.
 
         Returns:
             bool: True if the response contains any of the valid options as whole words, False otherwise.
         """
+        if isinstance(response, dict):
+            response = response["response"]
+
         # Build a list of valid options as strings.
         if isinstance(response_options, range):
             options = [str(opt) for opt in response_options]
         elif isinstance(response_options, list):
             options = [str(opt) for opt in response_options]
         else:
-            options = [str(response_options)]
+            return True
 
         # Check if any valid option appears as a whole word inside the response.
         for opt in options:
@@ -281,21 +293,59 @@ class ConversationalSyntheticAgent(SyntheticAgent):
                 return True
         return False
 
-    def _insert_speculation_instruction(self) -> None:
-        """Appends a speculation instruction to the last message in the message history
-        if the content of the message starts with "Facilitator".
+    def _insert_formatting_instruction(
+        self, generate_speculation_score: str, format_response: str
+    ) -> None:
+        """Inserts a formatting instruction into the most recent facilitator message in the message history,
+        based on the specified flags for generating a speculation score and formatting the response.
 
-        The speculation instruction provides guidance to include a speculation score
-        at the end of the response, ranging from 0 (not speculative at all) to 100
-        (fully speculative), in the specified format.
+        Args:
+            generate_speculation_score (str): A flag indicating whether to include a speculation score
+                in the formatting instruction. Expected values are "1" (include) or other (exclude).
+            format_response (str): A flag indicating whether to format the response as a JSON object.
+                Expected values are "1" (format as JSON) or other (exclude).
 
-        This method does nothing if the last message does not start with "Facilitator".
+        Returns:
+            None: The method modifies the `message_history` in place. If the most recent message is not
+            from the facilitator or no valid flags are provided, the method exits without making changes.
         """
-        if self.message_history[-1]["content"].startswith("Facilitator"):
-            speculation_instruction = "\n\nAt the end of your response, please include a speculation score from 0 (not speculative at all) to 100 (fully speculative) in the format:\nSpeculation Score: XXX"
-            self.message_history[-1]["content"] += speculation_instruction
+        # Only alter the most recent facilitator message.
+        if not self.message_history[-1]["content"].startswith("Facilitator"):
+            return None
+
+        if generate_speculation_score == "1" and format_response == "1":
+            formatting_instruction = (
+                "\n\n---\n"
+                "✱ **Formatting Instruction** ✱\n"
+                "Reply **only** with a valid JSON object containing exactly three keys:\n"
+                "  • `response` (string)  – your main answer.\n"
+                "  • `reasoning` (string) – concise explanation of how you arrived at the answer.\n"
+                "  • `speculation_score` (integer 0‑100) – how speculative the answer is, "
+                "where 0 = not speculative at all and 100 = entirely speculative.\n"
+            )
+
+        elif generate_speculation_score == "1":
+            formatting_instruction = (
+                "\n\n---\n"
+                "✱ **Formatting Instruction** ✱\n"
+                "Write your response in normal prose, then on a new line append:\n"
+                "`Speculation Score: <integer 0‑100>`\n"
+            )
+
+        elif format_response == "1":
+            formatting_instruction = (
+                "\n\n---\n"
+                "✱ **Formatting Instruction** ✱\n"
+                "Reply **only** with a valid JSON object containing exactly two keys:\n"
+                "  • `response`  (string) – your main answer.\n"
+                "  • `reasoning` (string) – concise explanation of how you arrived at the answer.\n"
+            )
+
         else:
-            pass
+            return None
+
+        # Update the facilitator’s instruction with additional formatting instructions.
+        self.message_history[-1]["content"] += formatting_instruction
 
     def respond(
         self,
@@ -303,6 +353,7 @@ class ConversationalSyntheticAgent(SyntheticAgent):
         validate_response: str = "0",
         response_options: Any = [],
         generate_speculation_score: str = "0",
+        format_response: str = "0",
     ) -> str:
         """Generate a response to a question posed to the synthetic agent.
 
@@ -311,6 +362,7 @@ class ConversationalSyntheticAgent(SyntheticAgent):
             validate_response (str): Either "0" or "1" to indicate whether to perform response validation or not
             response_options (Any): A list of options to choose from for the response.
             generate_speculation_score (str): Either "0" or "1" to indicate whether to generate a speculation score or not.
+            format_response (str): Either "0" or "1" to indicate whether to format the response into a JSON dictionary for easy parsing.
 
         Returns:
             str: The response generated by the synthetic agent.
@@ -320,8 +372,10 @@ class ConversationalSyntheticAgent(SyntheticAgent):
         )
 
         try:
-            if generate_speculation_score == "1":
-                self._insert_speculation_instruction()
+            self._insert_formatting_instruction(
+                generate_speculation_score=generate_speculation_score,
+                format_response=format_response,
+            )
 
             if validate_response == "1":  # Validate response based on response_options
                 for _ in range(NUM_RETRY):
@@ -329,6 +383,7 @@ class ConversationalSyntheticAgent(SyntheticAgent):
                         llm_client=self.llm_client,
                         model_info=self.model_info,
                         message_history=self.message_history,
+                        temperature=self.temperature,
                     )
                     if response_options and self._validate_response(
                         response=response, response_options=response_options
@@ -340,6 +395,7 @@ class ConversationalSyntheticAgent(SyntheticAgent):
                     llm_client=self.llm_client,
                     model_info=self.model_info,
                     message_history=self.message_history,
+                    temperature=self.temperature,
                 )
 
             return response

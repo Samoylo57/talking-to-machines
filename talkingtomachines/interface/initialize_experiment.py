@@ -103,6 +103,7 @@ def initialize_experiment(prompt_template_dict: dict) -> list:
         # Initialise experiment based on rendered prompt template
         experiment = AItoAIInterviewExperiment(
             model_info=rendered_prompt_template_dict["model_info"],
+            temperature=rendered_prompt_template_dict["temperature"],
             agent_profiles=rendered_prompt_template_dict["agent_profiles"],
             agent_roles=rendered_prompt_template_dict["agent_roles"],
             num_agents_per_session=rendered_prompt_template_dict[

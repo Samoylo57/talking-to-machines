@@ -1,6 +1,5 @@
 import os
 import pandas as pd
-import warnings
 
 
 def validate_prompt_template_path(file_path: str) -> None:
@@ -24,34 +23,6 @@ def validate_prompt_template_path(file_path: str) -> None:
         raise ValueError(
             f"The file provided is not a valid Excel file. Expected extensions: {', '.join(valid_extensions)}"
         )
-
-
-def validate_test_mode(test_mode: str) -> bool:
-    """Validates the test_mode input and returns a boolean value.
-
-    Args:
-        test_mode (str): The test mode input, expected to be 'True', 'true', 'False', or 'false'.
-
-    Returns:
-        bool: True if test_mode is 'True' or 'true', False if test_mode is 'False' or 'false'.
-              If the input is invalid, a warning is issued and the function returns True by default.
-
-    Raises:
-        UserWarning: If the input is not one of the valid options.
-    """
-    # Convert the input to lowercase for case-insensitive comparison
-    test_mode = test_mode.lower()
-
-    # Check if the input is one of the valid options
-    if test_mode == "true":
-        return True
-    elif test_mode == "false":
-        return False
-    else:
-        warnings.warn(
-            f"Invalid test_mode: {test_mode}. Expected 'True', 'true', 'False', or 'false'. Since a valid test_mode is not provided, test mode is set to 'True' by default."
-        )
-        return True
 
 
 def validate_prompt_template_sheets(
@@ -98,6 +69,7 @@ def validate_experimental_settings_sheet(experimental_settings: pd.DataFrame) ->
         "experiment_id",
         "model_info",
         "api_endpoint",
+        "temperature",
         "num_agents_per_session",
         "num_sessions",
         "max_conversation_length",
@@ -112,7 +84,7 @@ def validate_experimental_settings_sheet(experimental_settings: pd.DataFrame) ->
     for setting in valid_settings:
         assert (
             setting in experimental_settings["experimental_setting"].tolist()
-        ), f"{setting} not found in experimental_setting column."
+        ), f"{setting} not found in experimental_setting worksheet."
 
 
 def validate_treatments_sheet(treatments: pd.DataFrame) -> None:
@@ -179,6 +151,7 @@ def validate_prompts_sheet(prompts: pd.DataFrame) -> None:
         "randomize_response_order",
         "validate_response",
         "generate_speculation_score",
+        "format_response",
     ]
     assert (
         list(prompts.columns) == expected_columns

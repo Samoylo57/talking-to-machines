@@ -20,7 +20,8 @@ PROMPT_TEMPLATE_SHEETS = [
 SPECIAL_ROLES = ["Facilitator", "Summarizer"]
 SUPPORTED_PROMPT_TYPES = [
     "context",
-    "question",
+    "public_question",
+    "private_question",
     "discussion",
 ]
 
@@ -122,7 +123,11 @@ def extract_agent_roles(file_path: str, sheet_name: str) -> dict:
 
 
 def parse_text_field(
-    text_field: str, agent_list: list, task_id: str, prompt_type: str
+    text_field: str,
+    agent_list: list,
+    task_id: str,
+    prompt_type: str,
+    is_response_options: bool,
 ) -> dict:
     """Parses the text for the llm_text and response_options fields, converting them into Python objects and assigning to agent roles.
 
@@ -137,6 +142,7 @@ def parse_text_field(
         agent_list (list): A list of agent names.
         task_id (str): The task ID associated with the llm_text.
         prompt_type (str): The type of the prompt.
+        is_response_options (bool): Boolean indicator on whether the function is parsing the text for the llm_text field or response_options field.
 
     Returns:
         dict: A dictionary mapping agent names to the llm_text.
@@ -144,16 +150,16 @@ def parse_text_field(
     # Create list of user-defined agents, excluding the special ones
     user_defined_agents = [agent for agent in agent_list if agent not in SPECIAL_ROLES]
     if isinstance(text_field, str):
-        stripped_text = text_field.strip()
+        text_field = text_field.strip()
     else:
         try:
-            stripped_text = str(text_field).strip()
+            text_field = str(text_field).strip()
         except Exception as e:
-            stripped_text = ""
+            text_field = ""
 
-    if prompt_type == "question":
+    if prompt_type in ["public_question", "private_question"]:
         # If the text starts with "{" and ends with "}", assume it's a dictionary literal.
-        if stripped_text.startswith("{") and stripped_text.endswith("}"):
+        if text_field.startswith("{") and text_field.endswith("}"):
             try:
                 agent_prompt_dict = ast.literal_eval(text_field)
             except (ValueError, SyntaxError) as e:
@@ -166,10 +172,25 @@ def parse_text_field(
 
         # Otherwise, it's a plain string: build a dictionary mapping each user-defined agent to that string.
         else:
-            return {agent: text_field for agent in user_defined_agents}
+            if is_response_options:
+                try:
+                    return {
+                        agent: ast.literal_eval(text_field)
+                        for agent in user_defined_agents
+                    }
+                except:
+                    return {agent: text_field for agent in user_defined_agents}
+            else:
+                return {agent: text_field for agent in user_defined_agents}
 
     elif prompt_type in ["context", "discussion"]:
-        return {"Facilitator": text_field}
+        if is_response_options:
+            try:
+                return {"Facilitator": ast.literal_eval(text_field)}
+            except:
+                return {"Facilitator": text_field}
+        else:
+            return {"Facilitator": text_field}
 
     else:
         raise ValueError(
@@ -237,6 +258,7 @@ def extract_prompts(file_path: str, sheet_name: str, agent_list: list) -> dict:
             "randomize_response_order",
             "validate_response",
             "generate_speculation_score",
+            "format_response",
         ]
     ].to_dict(orient="records")
 
@@ -247,6 +269,7 @@ def extract_prompts(file_path: str, sheet_name: str, agent_list: list) -> dict:
             agent_list=agent_list,
             task_id=prompt_dict["task_id"],
             prompt_type=prompt_dict["type"],
+            is_response_options=False,
         )
 
         prompt_dict["response_options"] = parse_text_field(
@@ -254,6 +277,7 @@ def extract_prompts(file_path: str, sheet_name: str, agent_list: list) -> dict:
             agent_list=agent_list,
             task_id=prompt_dict["task_id"],
             prompt_type=prompt_dict["type"],
+            is_response_options=True,
         )
         prompt_dict["response_options"] = parse_range_response_options(
             prompt_dict["response_options"]
@@ -342,9 +366,10 @@ def print_experimental_settings(
         Experiment Settings for {experiment_id}:
         {line_separator}
         Model Info: {model_info}
+        Temperature: {temperature}
         Open AI API Key: {openai_api_key}
         HuggingFace API Key: {hf_api_key}
-        API Endpoint (only valid when using HuggingFace Models): {api_endpoint}
+        API Endpoint (only needed when using HuggingFace Models): {api_endpoint}
         Number of Agents per Session (Excluding Special Roles like Facilitator and Summarizer): {num_agents_per_session}
         Number of Sessions: {num_sessions}
         Maximum Conversation Length: {max_conversation_length}
@@ -364,6 +389,7 @@ def print_experimental_settings(
             experiment_id=experiment.experiment_id,
             line_separator="=" * (25 + len(experiment.experiment_id)),
             model_info=experiment.model_info,
+            temperature=experiment.temperature,
             openai_api_key=DevelopmentConfig.OPENAI_API_KEY,
             hf_api_key=DevelopmentConfig.HF_API_KEY,
             api_endpoint=experiment.api_endpoint,
@@ -414,22 +440,11 @@ def main():
         default="",
         help="Path to the prompt template file",
     )
-    parser.add_argument(
-        "test_mode",
-        type=str,
-        nargs="?",
-        default="True",
-        help="Bootlean indicating whether the experiment will be run in test mode. If this argument is not provided, the experiment will default to test mode.",
-    )
     args = parser.parse_args()
     prompt_template_file_path = args.prompt_template_file_path
-    test_mode = args.test_mode
 
     # Validate the provided directory path to the prompt template
     validate_prompt_template_path(file_path=prompt_template_file_path)
-
-    # Validate the test mode
-    test_mode = validate_test_mode(test_mode=test_mode)
 
     # Read the prompt template in Excel format
     prompt_template = pd.ExcelFile(prompt_template_file_path)
@@ -500,43 +515,47 @@ def main():
     # Ask for user confirmation to run experiment
     user_input = (
         input(
-            "Verify the experiment settings provided above and reply 'y' to start running the experiment. Otherwise, respond with anything else to terminate the experiment: "
+            "Verify the experiment settings above and choose a run mode:\n"
+            "  • type 'test'  → run experiment in TEST mode (one randomly selected session per treatment)\n"
+            "  • type 'full'  → run the FULL experiment\n"
+            "  • anything else → terminate experiment\n"
+            "Your choice: "
         )
         .strip()
         .lower()
     )
-    if user_input == "y":
-        print("Experiment has started.")
+    if user_input == "test":
+        print("Experiment has started running (test mode)...")
 
-        if test_mode:
-            experiment_version = 1
-            for experiment in tqdm(experiment_list):
-                experiment.run_experiment(
-                    test_mode=test_mode,
-                    version=experiment_version,
-                    save_results_as_csv=True,
-                )
-                experiment_version += 1
-        else:
-            # Prepare a list of arguments for each experiment
-            experiment_args = [
-                (experiment, test_mode, idx + 1)
-                for idx, experiment in enumerate(experiment_list)
+        experiment_version = 1
+        for experiment in tqdm(experiment_list):
+            experiment.run_experiment(
+                test_mode=True,
+                version=experiment_version,
+                save_results_as_csv=True,
+            )
+            experiment_version += 1
+        print("Experiment is completed successfully.")
+
+    elif user_input == "full":
+        print("Experiment has started running (full mode)...")
+
+        # Prepare a list of arguments for each experiment
+        experiment_args = [
+            (experiment, False, idx + 1)
+            for idx, experiment in enumerate(experiment_list)
+        ]
+
+        # Run experiments in parallel using ProcessPoolExecutor
+        with concurrent.futures.ProcessPoolExecutor() as executor:
+            # Submit all experiments
+            futures = [
+                executor.submit(run_experiment_wrapper, arg) for arg in experiment_args
             ]
 
-            # Run experiments in parallel using ProcessPoolExecutor
-            with concurrent.futures.ProcessPoolExecutor() as executor:
-                # Submit all experiments
-                futures = [
-                    executor.submit(run_experiment_wrapper, arg)
-                    for arg in experiment_args
-                ]
-
-                # Update progress bar as each experiment completes
-                for _ in tqdm(
-                    concurrent.futures.as_completed(futures), total=len(futures)
-                ):
-                    pass
+            # Update progress bar as each experiment completes
+            for _ in tqdm(concurrent.futures.as_completed(futures), total=len(futures)):
+                pass
         print("Experiment is completed successfully.")
 
     else:
