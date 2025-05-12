@@ -32,7 +32,7 @@ def validate_prompt_template_sheets(
 
     Args:
         excel_file (pd.ExcelFile): The Excel file to validate.
-        required_sheet_list (list of str): A list of sheet names that are required to be present in the Excel file.
+        required_sheet_list (list[str]): A list of sheet names that are required to be present in the Excel file.
 
     Raises:
         ValueError: If any of the required sheets are missing from the Excel file.

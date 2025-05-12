@@ -1,12 +1,12 @@
 import re
 import warnings
+import openai
 from typing import Any, Callable
 from talkingtomachines.generative.prompt import (
     generate_conversational_agent_system_message,
     generate_profile_prompt,
 )
 from talkingtomachines.generative.llm import query_llm
-from openai import OpenAI
 from talkingtomachines.config import DevelopmentConfig
 
 ProfileInfo = dict[str, Any]
@@ -52,7 +52,7 @@ class SyntheticAgent:
         model_info (str): The information about the model used by the agent.
         temperature (float): The model temperature setting for the agent.
         api_endpoint (str): API endpoint to the LLM model if the model is hosted externally.
-        llm_client (OpenAI): The LLM client.
+        llm_client (openai.OpenAI): The LLM client.
     """
 
     def __init__(
@@ -82,25 +82,25 @@ class SyntheticAgent:
         """Initialise a language model client based on the provided model information and API endpoint.
 
         Returns:
-            OpenAI: An instance of the OpenAI client configured with the appropriate API key
+            openai.OpenAI: An instance of the openai.OpenAI client configured with the appropriate API key
                 and endpoint based on the model information.
 
         Raises:
             ValueError: If the provided model_info is not supported.
         """
         if self.model_info in OPENAI_MODELS:
-            return OpenAI(api_key=DevelopmentConfig.OPENAI_API_KEY)
+            return openai.OpenAI(api_key=DevelopmentConfig.OPENAI_API_KEY)
 
         elif self.model_info in ["hf-inference"]:
-            return OpenAI(
+            return openai.OpenAI(
                 base_url=self.api_endpoint, api_key=DevelopmentConfig.HF_API_KEY
             )
 
         else:
             warnings.warn(
-                f"{self.model_info} is not 'hf-inference' and not one of the OpenAI instruct models ({OPENAI_MODELS}). Defaulting to loading OpenAI configurations."
+                f"{self.model_info} is not 'hf-inference' and not one of the openai.OpenAI instruct models ({OPENAI_MODELS}). Defaulting to loading import openai.OpenAI configurations."
             )
-            return OpenAI(api_key=DevelopmentConfig.OPENAI_API_KEY)
+            return openai.OpenAI(api_key=DevelopmentConfig.OPENAI_API_KEY)
 
     def to_dict(self) -> dict[str, Any]:
         """Converts the SyntheticAgent object to a dictionary.
@@ -164,7 +164,7 @@ class ConversationalSyntheticAgent(SyntheticAgent):
         role_description (str): The description of the role assigned to the agent.
         treatment (str): The treatment assigned to the session.
         system_message (str): The system message generated for the conversation.
-        llm_client (OpenAI): The LLM client.
+        llm_client (openai.OpenAI): The LLM client.
         message_history (List[dict]): The history of the conversation with the synthetic agent.
     """
 
