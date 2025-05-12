@@ -1,6 +1,7 @@
 import time
 import warnings
 import json
+import openai
 from typing import List, Any
 from openai import OpenAI
 
@@ -24,12 +25,15 @@ OPENAI_MODELS = [
 
 
 def query_llm(
-    llm_client: OpenAI, model_info: str, message_history: List[dict], temperature: float
+    llm_client: openai.OpenAI,
+    model_info: str,
+    message_history: List[dict],
+    temperature: float,
 ) -> str:
     """Queries a LLM for a response based on the latest message history.
 
     Args:
-        llm_client (OpenAI): The LLM client.
+        llm_client (openai.OpenAI): The LLM client.
         model_info (str): Information about the model.
         message_history (List[dict]): Contains the history of message exchanged between user and assistant.
         temperature (float): The model temperature setting for the LLM.
@@ -63,12 +67,15 @@ def query_llm(
 
 
 def query_open_ai(
-    llm_client: OpenAI, model_info: str, message_history: List[dict], temperature: float
+    llm_client: openai.OpenAI,
+    model_info: str,
+    message_history: List[dict],
+    temperature: float,
 ) -> Any:
     """Query OpenAI API with the provided prompt.
 
     Args:
-        llm_client (OpenAI): The LLM client from OpenAI class.
+        llm_client (openai.OpenAI): The LLM client from OpenAI class.
         model_info (str): Information about the model.
         message_history (List[dict]): Contains the history of message exchanged between user and assistant.
         temperature (float): The model temperature setting for the LLM.
@@ -104,12 +111,12 @@ def query_open_ai(
 
 
 def query_hugging_face(
-    llm_client: OpenAI, message_history: List[dict], temperature: float
+    llm_client: openai.OpenAI, message_history: List[dict], temperature: float
 ) -> Any:
     """Query Hugging Face's dedicated inference API end point with the provided prompt.
 
     Args:
-        llm_client (OpenAI): The LLM client from OpenAI class.
+        llm_client (openai.OpenAI): The LLM client from OpenAI class.
         message_history (List[dict]): Contains the history of message exchanged between user and assistant.
         api_endpoint (str, optional): API endpoint to the LLM that is hosted externally.
         temperature (float): The model temperature setting for the LLM.
