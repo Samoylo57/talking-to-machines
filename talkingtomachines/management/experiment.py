@@ -1605,8 +1605,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                     random.shuffle(response_options)
                 formatted = (
                     ", ".join(f"'{opt}'" for opt in response_options[:-1])
-                    + " or "
-                    + str(response_options[-1])
+                    + f" or '{response_options[-1]}'"
                 )
             return f"Respond with one option from {formatted}:"
 
