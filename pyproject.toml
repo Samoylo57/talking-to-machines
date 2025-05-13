@@ -25,7 +25,8 @@ dependencies = [
   "scikit-learn>=1.4", 
   "nltk==3.8.1", 
   "psycopg2-binary==2.9.9", 
-  "openai==1.37.0"
+  "openai==1.37.0",
+  "Jinja2==3.0.0",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
