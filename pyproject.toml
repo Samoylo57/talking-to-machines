@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 # ─── Project metadata ─────────────────────────────────────────────────────────
 [project] 
 name = "talkingtomachines" 
-version = "0.1.4" 
+version = "0.1.5" 
 description = "A python package for conducting AI-AI experiments for social science research." 
 readme = "README.md" 
 requires-python = ">=3.10" 

@@ -94,10 +94,7 @@ def query_open_ai(
             )
             formatted_response = response.choices[0].message.content.strip()
 
-            try:
-                return json.loads(formatted_response)
-            except json.JSONDecodeError:
-                return formatted_response
+            return formatted_response
 
         except Exception as e:
             # Log the exception
@@ -134,14 +131,12 @@ def query_hugging_face(
             )
             formatted_response = response.choices[0].message.content.strip()
 
-            try:
-                return json.loads(formatted_response)
-            except json.JSONDecodeError:
-                return formatted_response
+            return formatted_response
 
         except Exception as e:
             # Log the exception
             print(
                 f"Error during Hugging Face API call: {e}. Retrying in {RETRY_DELAY // 60} mins..."
             )
+            print(message_history)
             time.sleep(RETRY_DELAY)

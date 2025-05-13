@@ -1,6 +1,7 @@
 import re
 import warnings
 import openai
+import json
 from typing import Any, Callable
 from talkingtomachines.generative.prompt import (
     generate_conversational_agent_system_message,
@@ -275,8 +276,11 @@ class ConversationalSyntheticAgent(SyntheticAgent):
         Returns:
             bool: True if the response contains any of the valid options as whole words, False otherwise.
         """
-        if isinstance(response, dict):
+        try:
+            response = json.loads(response)
             response = response["response"]
+        except json.JSONDecodeError:
+            pass
 
         # Build a list of valid options as strings.
         if isinstance(response_options, range):
