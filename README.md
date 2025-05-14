@@ -1,7 +1,7 @@
 # Talking to Machines Platform (Beta Release)
 
 
-The Talking to Machines platform is developed to facilitate the design, conduct, and analysis of large-scale experimental trials and treatments through LLM-powered agents. 
+The **talkingtomachines** platform is developed to facilitate the design, conduct, and analysis of large-scale experimental trials and treatments through LLM-powered agents. 
 
 ---
 
@@ -10,15 +10,26 @@ The Talking to Machines platform is developed to facilitate the design, conduct,
 * **CLI‑first Workflow** – build and run large-scale experimental trials straight from your terminal.
 * **Python API** – the same engine is importable as a Python package in notebooks and pipelines.
 * **Multi‑model Provider** – ships with wrappers for **OpenAI** chat models and the **Hugging Face** Inference API.
-* **Reproducible** – every run is JSON‑logged for auditable, reproducible results.
+* **Reproducible** – every run is JSON‑logged for auditable and reproducible results.
 
 ---
 
 ## 🔧 Installation
 
-> **Requires Python 3.10 or higher**
 
-### 1. Create and activate a virtual environment
+### 1. Install Python 3.10 or newer
+
+* Visit the official Python downloads page:
+https://www.python.org/downloads/
+
+* Choose the installer that matches your operating system (Windows, macOS, or Linux).
+* Download and run the installer, accepting the default options.  Windows users — be sure to tick “Add Python to PATH”.
+* Verify the install on your terminal:
+```bash
+python --version   # should print 3.10.x or higher
+```
+
+### 2. Create and activate a virtual environment
 
 ```bash
 python -m venv .venv
@@ -26,12 +37,15 @@ source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install --upgrade pip
 ```
 
-### 2. Install the talkingtomachines package
+### 3. Install the talkingtomachines package
 ```bash
-pip install talkingtomachines
+pip install \
+ --index-url https://test.pypi.org/simple/ \
+ --extra-index-url https://pypi.org/simple \
+ talkingtomachines
 ```
 
-### 3. Provide API keys
+### 4. Provide API keys
 
 Approach 1: Create a `.env` file in your root directory
 ```ini
@@ -58,7 +72,7 @@ The platform can be used as a CLI tool for non-technical users or users who are 
 # Show all options
 $ talkingtomachines --help
 
-# Parse a prompt template containing the experimental setup
+# Provide the file path to the prompt template to parse the experimental setup
 $ talkingtomachines path/to/prompt/template.xlsx
 ```
 
@@ -68,7 +82,7 @@ The CLI displays the details of the experimental setup parsed from the prompt te
 * input `full` – runs the **FULL** experiment
 * input anything else – terminates experiment immediately.
 
-Experimental results are saved to your root directory as a JSON file (`experiment_results/<experiment_id>.json`) and CSV file (`experiment_results/<experiment_id>.csv`).
+Experimental results are saved to your root directory as a JSON file containing the raw outputs (`experiment_results/<experiment_id>.json`) and CSV file containing the formatted outputs (`experiment_results/<experiment_id>.csv`).
 
 ### Python Package
 
@@ -78,13 +92,15 @@ The platform can also be imported as a Python package for power users/developers
 import talkingtomachines
 ```
 
+Note: A simple, end‑to‑end Python example showing how to construct and conduct an experiment using the talkingtomachines package will be added in the future.
+
 ---
 
 ## 📄 Prompt Template Setup
 
 Detailed instructions on how to populate the prompt template can be found here: [`Prompt Template Instructions`](https://github.com/talking-to-machines/talking-to-machines/tree/main/talkingtomachines/interface/README.md)
 
-You may also check out [`Prompt Template Sample`](https://github.com/talking-to-machines/talking-to-machines/blob/main/demos/public_good_experiment_prompt_template_sample.xlsx) for a minimal starter.
+You may also check out [`Demo Example`](https://github.com/talking-to-machines/talking-to-machines/tree/main/demos/public_good_experiment) for a minimal starter or a clean version of the prompt template for creating new experiments [`New Prompt Template`](https://github.com/talking-to-machines/talking-to-machines/tree/main/demos/prompt_template.xlsx).
 
 ---
 
