@@ -41,8 +41,8 @@ constants              ← contains the string/numerical constants that can be 
 
 |Column|**Required**|Description|
 |-|-|-|
-|`treatment_label`| **Yes (unique)**| A short, concise label for the treatment arm. In the case that the 'treatment_assignment_strategy' is manual, the treatment labels in this worksheet should exactly align with the treatment labels provided in the 'agent_profiles' worksheet.|
-|`treatment_description`|**Yes**| A full description of the treatment arm that will be presented to the LLM.|
+|`treatment_label`| **Yes (unique)**| A short, concise label for each treatment arm. In the case that the treatment assignment strategy is manual, the treatment labels in this worksheet should exactly align with the treatment labels provided in the 'agent_profiles' worksheet.|
+|`treatment_description`|**Yes**| A full description of the treatment arm that will be presented to the LLM. This description will be included as part of the LLM agent's system message.|
 
 *Extra columns will be rejected. Each row refers to a unique treatment arm.*
 
@@ -52,8 +52,8 @@ constants              ← contains the string/numerical constants that can be 
 
 |Column|**Required**|Description|
 |-|-|-|
-|`role_label`| **Yes (unique)**| A short, concise label for the assigned role. In the case that the 'role_assignment_strategy' is manual, the roles labels in this worksheet should exactly align with the roles labels provided in the 'agent_profiles' worksheet. There are two unique roles that has special abilities (e.g., Facilitator and Summarizer). The 'Facilitator' role controls the flow of the experiment and must be defined for each experiment. The 'Summarizer' role can be used to provide summaries at different stages of the experiment or perform intermediate payoff calculations during interactive experiments.|
-|`role_description`|**Yes**| A full description of the role that will be adopted by the LLM.|
+|`role_label`| **Yes (unique)**| A short, concise label for the assigned role. In the case that the role assignment strategy is manual, the roles labels in this worksheet should exactly align with the roles labels provided in the 'agent_profiles' worksheet. There are two unique roles that has special abilities (i.e., Facilitator and Summarizer). The 'Facilitator' role controls the flow of the experiment and must be defined in the 'agent_profiles' worksheet for each experiment. The 'Summarizer' role can be used to provide summaries at different stages of the experiment or perform intermediate payoff calculations during interactive experiments. The [`demo example`](https://github.com/talking-to-machines/talking-to-machines/tree/main/demos/public_good_experiment) provides a useful reference on how the 'Summarizer' role can be leveraged to calculate participant payoffs at the end of each experiment round.|
+|`role_description`|**Yes**| A full description of the role that will be adopted by the LLM. This description will be included as part of the LLM agent's system message.|
 
 *Extra columns will be rejected. Each row refers to a unique agent role.*
 
@@ -67,11 +67,11 @@ constants              ← contains the string/numerical constants that can be 
 |`type`|**Yes**|The type of task that will be conducted during this experiment round. Expected values: 'context', 'discussion', 'public_question', 'private_question'. **context** tasks are used to provide the LLM with contextual information about the experiment, and must be defined at the beginning as the first task to be incorporated in the LLM's system message. **discussion** tasks are meant to facilitate a group discussion/conversation where a question is posed to the group at the beginning of the round and the participants will respond sequentially (i.e., Facilitator → Participant 1 → Participant 2 → Participant 3). **public_question** and **private_question** tasks are one-on-one type questions that will be posed separately to each participant (i.e., Facilitator → Participant 1 → Facilitator → Participant 2 → Facilitator → Participant 3). However, **public_question** tasks are chosen when you want the participants to see their peers' answers within the same round. On the other hand, **private_question** tasks are chosen when you want to hide the participants' responses from others until the round ends.|
 |`task_order`|**Yes**|A integer value indicating the order in which the tasks will be executed. If the order value is duplicated across different tasks, then the order of these tasks will be randomized.|
 |`is_adapted`|**Yes**|An boolean field indicating if the text from the actual experiment has been adapted. Expected values: '0', '1'.|
-|`human_text`|**Optional**|The original wording used in the actual experiment.|
-|`llm_text`|**Yes**|The prompt presented to the LLM during each round of the experiment. The prompt can be defined as a plain string; in that case the same prompt will be automatically presented to each user-defined role listed in the 'agent_roles' worksheet. Alternatively, you can define a Python dictionary, where the keys are role labels (exactly matching those in 'agent-roles') and values are the prompt text presented to that role. When presenting your prompt as a Python dictionary, you can customise the role order (based on the dictionary's order) and also the roles that will participate in this round.|
+|`human_text`|**Optional**|The original instructions used in the actual experiment.|
+|`llm_text`|**Yes**|The prompt presented to the LLM during each round of the experiment. This could be adapted from the original instructions used in the actual experiment to improve the LLM's replication performance. The prompt can be defined as a plain string; in that case the same prompt will be automatically presented to each user-defined role listed in the 'agent_roles' worksheet. Alternatively, you can define a Python dictionary, where the keys are role labels (exactly matching those in 'agent_roles') and values are the prompt text presented to that role. When presenting your prompt as a Python dictionary, you can customise the role order (based on the dictionary's order) and also the roles that will participate in this experiment round.|
 |`var_name`|**Yes (unique)**|The variable name that will be tagged to the LLM's response when generating the output JSON and CSV files. All variable names should be unique.|
 |`var_type`|**Optional**|The expected response type. Expected values: 'category', 'integer', 'float'.|
-|`response_options`|**Optional**|The response options presented to the LLM during each round of the experiment for validation. The response options can be defined as either a plain string (e.g., "Enter a number between 0 and 5"), a Python list (e.g., [0,1,2,3,4,5]), or a Python tuple (e.g., (0,5)). In that case, the same response options will be automatically assigned to every user-defined role listed in the 'agent_roles' worksheet. Alternatively, you can define a Python dictionary, where the keys are role labels (exactly matching those in the 'agent_roles' worksheet) and values are the response options for that role. Similarly, the response options can be a plain string, a Python list, or a Python tuple. When presenting your response options as a Python dictionary, you can customise different action spaces for each role in that round.|
+|`response_options`|**Optional**|The response options that will be used to validate the LLM's response during each experiment round. The response options can be defined either as a plain string (e.g., "Enter a number between 0 and 5"), a Python list (e.g., [0,1,2,3,4,5]), or a Python tuple (e.g., (0,5)). In that case, the same response options will be automatically assigned to every user-defined role listed in the 'agent_roles' worksheet. Alternatively, you can define a Python dictionary, where the keys are role labels (exactly matching those in the 'agent_roles' worksheet) and values are the response options for that specific role. Similarly, the response options can be a plain string, a Python list, or a Python tuple. When presenting your response options as a Python dictionary, you can customise different action spaces for each role in that experiment round.|
 |`randomize_response_order`|**Yes**| A boolean field indicating if the order of the response options should be randomized before presenting it to the LLM. Expected values: '0', '1'.|
 |`validate_response`|**Yes**|A boolean field indicating if the LLM responses should be validated against the values in the `response_options` field. If the LLM response does not match with any of the options in the `response_options` field, the LLM will be queried again for a maximum of 5 times before proceeding with the last response. Expected values: '0', '1'.|
 |`generate_speculation_score`|**Yes**|A boolean field indicating if the LLM should generate a speculation score (where 0 = not speculative at all and 100 = entirely speculative.). This is used to guard against LLM hallucination. Expected values: '0', '1'.|
@@ -83,10 +83,12 @@ constants              ← contains the string/numerical constants that can be 
 
 ## 5.  `agent_profiles`
 
-* **Row 1:** Shorten name for the actual survey question. *Must be non‑blank & unique.*
-* **Row 2:** The actual survey question. *Must be non‑blank and human-readable.*
+* **Row 1:** Shorten name for the survey question. *Must be non‑blank & unique.*
+* **Row 2:** The actual wording used in the survey question. *Must be non‑blank and human-readable.*
 * **Row 3 … n:** Actual agent data, where each row represent the profile of a unique participant and each column refers to the response provided by the participant for a particular survey question.
 * There must be a column named 'ID' representing a unique identifier for each participant profile.
+* Each participant’s survey responses are merged into a single Q&A text snippet—`Interviewer: {question}` followed by `Me: {response}`—that records their demographic profile. This snippet is then inserted into the LLM agent’s system message.
+
 
 ---
 

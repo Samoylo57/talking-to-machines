@@ -23,7 +23,7 @@ The **talkingtomachines** platform is developed to facilitate the design, conduc
 https://www.python.org/downloads/
 
 * Choose the installer that matches your operating system (Windows, macOS, or Linux).
-* Download and run the installer, accepting the default options.  Windows users — be sure to tick “Add Python to PATH”.
+* Download and run the installer, accepting the default options.  For Windows users, be sure to tick “Add Python to PATH”.
 * Verify the install on your terminal:
 ```bash
 python --version   # should print 3.10.x or higher
@@ -45,7 +45,7 @@ pip install \
  talkingtomachines
 ```
 
-### 4. Provide API keys
+### 4. Provide API keys for OpenAI and HuggingFace
 
 Approach 1: Create a `.env` file in your root directory
 ```ini
@@ -54,7 +54,7 @@ OPENAI_API_KEY=sk-...
 HF_API_KEY=hf_...
 ``` 
 
-Approach 2: Export as environment variables 
+Approach 2: Export as environment variables on your terminal
 ```bash
 export OPENAI_API_KEY=sk-...
 export HF_API_KEY=hf_...
@@ -82,7 +82,7 @@ The CLI displays the details of the experimental setup parsed from the prompt te
 * input `full` – runs the **FULL** experiment
 * input anything else – terminates experiment immediately.
 
-Experimental results are saved to your root directory as a JSON file containing the raw outputs (`experiment_results/<experiment_id>.json`) and CSV file containing the formatted outputs (`experiment_results/<experiment_id>.csv`).
+Experimental results are saved to your root directory as a JSON file containing the raw outputs (`experiment_results/<experiment_id>.json`) and a CSV file containing the formatted outputs (`experiment_results/<experiment_id>.csv`).
 
 ### Python Package
 
@@ -92,7 +92,7 @@ The platform can also be imported as a Python package for power users/developers
 import talkingtomachines
 ```
 
-Note: A simple, end‑to‑end Python example showing how to construct and conduct an experiment using the talkingtomachines package will be added in the future.
+Note: A simple, end‑to‑end Python example on how to construct and conduct an experiment using the talkingtomachines package will be added in the future.
 
 ---
 
@@ -100,7 +100,7 @@ Note: A simple, end‑to‑end Python example showing how to construct and condu
 
 Detailed instructions on how to populate the prompt template can be found here: [`Prompt Template Instructions`](https://github.com/talking-to-machines/talking-to-machines/tree/main/talkingtomachines/interface/README.md)
 
-You may also check out [`Demo Example`](https://github.com/talking-to-machines/talking-to-machines/tree/main/demos/public_good_experiment) for a minimal starter or a clean version of the prompt template for creating new experiments [`New Prompt Template`](https://github.com/talking-to-machines/talking-to-machines/tree/main/demos/prompt_template.xlsx).
+You may also check out [`Demo Example`](https://github.com/talking-to-machines/talking-to-machines/tree/main/demos/public_good_experiment) to see an example of a prompt template that was prepared by the development team to replicate a public goods experiment using the **talkingtomachines** platform, or a clean version of the prompt template for creating new experiments [`New Prompt Template`](https://github.com/talking-to-machines/talking-to-machines/tree/main/demos/prompt_template.xlsx).
 
 ---
 
