@@ -9,11 +9,24 @@ def test_query_llm_supported_models(mocker):
     )
 
     supported_models = [
+        "gpt-5",
+        "gpt-5-mini",
+        "gpt-5-nano",
+        "gpt-5-chat-latest",
+        "gpt-5-codex",
+        "gpt-5-pro",
+        "gpt-4.1",
+        "gpt-4.1-mini",
+        "gpt-4.1-nano",
         "gpt-4o",
+        "gpt-4o-2024-05-13",
         "gpt-4o-mini",
-        "gpt-4-turbo",
-        "gpt-4",
-        "gpt-3.5-turbo",
+        "o1",
+        "o1-pro",
+        "o3-pro",
+        "o3",
+        "o4-mini",
+        "hf-inference",
     ]
     message_history = [{"role": "user", "content": "Hello!"}]
 

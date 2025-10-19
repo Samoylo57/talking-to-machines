@@ -1,20 +1,68 @@
-def generate_profile_prompt(profile_info: dict) -> str:
-    """Formats the demographic profile information of a synthetic subject into a prompt.
+import openai
+import pandas as pd
+from talkingtomachines.generative.llm import query_llm
+
+
+def generate_profile_prompt(
+    profile_info: dict,
+    include_backstories: bool,
+    llm_client: openai.OpenAI = None,
+    model_info: str = None,
+    temperature: float = None,
+) -> str:
+    """
+    Generates a demographic profile prompt based on the provided profile information.
 
     Args:
-        profile_info (dict): A dictionary containing the demographic profile information of the synthetic subject.
+        profile_info (dict): A dictionary containing demographic profile questions as keys
+            and their corresponding responses as values. The key "ID" is ignored.
+        include_backstories (bool): A flag indicating whether to include a detailed backstory
+            in the generated prompt.
+        llm_client (openai.OpenAI, optional): An instance of the OpenAI client used to generate
+            backstories. Required if `include_backstories` is True.
+        model_info (str, optional): The model information to be used for generating backstories.
+            Required if `include_backstories` is True.
+        temperature (float, optional): The temperature setting for the language model when
+            generating backstories. Required if `include_backstories` is True.
 
     Returns:
-        str: The formatted profile information as a prompt.
+        str: The generated demographic profile prompt. If `include_backstories` is True, the
+        prompt will include a detailed backstory. Returns an empty string in case of an error.
+
+    Raises:
+        ValueError: If `include_backstories` is True and any of `llm_client`, `model_info`, or
+        `temperature` is not provided.
+
+    Notes:
+        - The function assumes that the `generate_backstories` function is defined elsewhere
+          and is responsible for generating the backstory text.
+        - Any exceptions encountered during the process are logged, and an empty string is returned.
     """
     try:
-        profile_prompt = "Your demographic profile:\n"
+        profile_prompt = "Prior to this study, you are asked to complete some interview questions about your demographic profile, which are provided below. Each question starts with 'Interviewer:', and your response is preceded by 'Me:'\n"
         counter = 1
         for question, response in profile_info.items():
-            if question == "ID":
+            if question == "ID" or pd.isna(response) or not response:
                 continue
             profile_prompt += f"{counter}) Interviewer: {question} Me: {response} "
             counter += 1
+
+        if include_backstories:
+            if llm_client is None or model_info is None or temperature is None:
+                raise ValueError(
+                    "llm_client, model_info, and temperature must be provided when include_backstories is True."
+                )
+
+            backstory_prompt = generate_backstories(
+                system_prompt=profile_prompt,
+                llm_client=llm_client,
+                model_info=model_info,
+                temperature=temperature,
+            )
+            profile_prompt += (
+                f"\n\nThis is a detailed backstory about yourself:\n{backstory_prompt}"
+            )
+
         return profile_prompt
 
     except Exception as e:
@@ -25,38 +73,64 @@ def generate_profile_prompt(profile_info: dict) -> str:
         return ""
 
 
-def generate_conversational_agent_system_message(
-    experiment_context: str,
+def generate_backstories(
+    system_prompt: str, llm_client: openai.OpenAI, model_info: str, temperature: float
+) -> str:
+    """
+    Generate a backstory using a language model based on the provided system prompt.
+
+    Args:
+        system_prompt (str): The initial system-level prompt to guide the language model's behavior.
+        llm_client (openai.OpenAI): The OpenAI client instance used to interact with the language model.
+        model_info (str): The identifier or configuration of the language model to be used.
+        temperature (float): The sampling temperature to control the randomness of the model's output.
+
+    Returns:
+        str: The generated backstory in first-person narration.
+    """
+    message_history = [
+        {"role": "system", "content": system_prompt},
+        {
+            "role": "user",
+            "content": "Create a backstory based on the information provided and describe it in detail in first person narration. Start generating the backstory immediately starting with 'I...'.",
+        },
+    ]
+
+    backstory_prompt = query_llm(
+        llm_client=llm_client,
+        model_info=model_info,
+        message_history=message_history,
+        temperature=temperature,
+    )
+
+    return backstory_prompt
+
+
+def generate_subject_system_message(
     treatment: str,
     role_description: str,
     profile_prompt: str,
 ) -> str:
-    """Constructs system message for conversational agents by combining experiment_context, treatment, profile_prompt, role description.
+    """Constructs system message for subjects by combining role description, profile_prompt, treatment, in that order.
 
     Args:
-        experiment_context (str): The context of the experiment.
         treatment (str): The treatment that is assigned to the session.
-        role_description (str): A description of the agent's role.
+        role_description (str): A description of the subject's role.
         profile_prompt (str): The demographic profile information of the synthetic subject generated by the generate_profile_prompt function.
 
     Returns:
         str: The constructed conversational system message.
     """
-    return (
-        f"{experiment_context}\n\n{treatment}\n\n{profile_prompt}\n\n{role_description}"
-    )
+    return f"{role_description}\n\n{profile_prompt}\n\n{treatment}"
 
 
-def generate_conversational_session_system_message(
-    experiment_context: str, treatment: str
-) -> str:
-    """Constructs system message for conversational sessions by combining experiment_context and treatment.
+def generate_session_system_message(experiment_context: str) -> str:
+    """Constructs system message for sessions by providing the experiment context.
 
     Args:
         experiment_context (str): The context of the experiment.
-        treatment (str): The treatment that is assigned to the session.
 
     Returns:
         str: The constructed conversational system message.
     """
-    return f"{experiment_context}\n\n{treatment}"
+    return f"{experiment_context}"

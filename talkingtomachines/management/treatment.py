@@ -86,7 +86,7 @@ def complete_random_assignment_session(
 
 
 def manual_assignment_session(
-    agent_profiles: pd.DataFrame,
+    demographic_profiles: pd.DataFrame,
     treatment_column: str,
     session_column: str,
     session_id_list: List[Any],
@@ -94,7 +94,7 @@ def manual_assignment_session(
     """Extract the session treatment dictionary pairs provided by the user.
 
     Args:
-        agent_profiles (pd.DataFrame): A list of treatment labels.
+        demographic_profiles (pd.DataFrame): A list of treatment labels.
         treatment_column (str): The column containing the assigned treatments.
         session_column (str): The column containing the session information.
         session_id_list (List[Any]): The list of session IDs for assignment.
@@ -105,7 +105,7 @@ def manual_assignment_session(
     session_treatment_dict = {}
     for session_id in session_id_list:
         session_treatment_set = set(
-            agent_profiles[agent_profiles[session_column] == session_id][
+            demographic_profiles[demographic_profiles[session_column] == session_id][
                 treatment_column
             ].tolist()
         )

@@ -104,14 +104,16 @@ def initialize_experiment(prompt_template_dict: dict) -> list:
         experiment = AItoAIInterviewExperiment(
             model_info=rendered_prompt_template_dict["model_info"],
             temperature=rendered_prompt_template_dict["temperature"],
-            agent_profiles=rendered_prompt_template_dict["agent_profiles"],
-            agent_roles=rendered_prompt_template_dict["agent_roles"],
-            num_agents_per_session=rendered_prompt_template_dict[
-                "num_agents_per_session"
+            demographic_profiles=rendered_prompt_template_dict["demographic_profiles"],
+            roles=rendered_prompt_template_dict["roles"],
+            num_subjects_per_session=rendered_prompt_template_dict[
+                "num_subjects_per_session"
             ],
             num_sessions=rendered_prompt_template_dict["num_sessions"],
             experiment_id=rendered_prompt_template_dict["experiment_id"],
-            api_endpoint=rendered_prompt_template_dict["api_endpoint"],
+            hf_inference_endpoint=rendered_prompt_template_dict[
+                "hf_inference_endpoint"
+            ],
             max_conversation_length=rendered_prompt_template_dict[
                 "max_conversation_length"
             ],
@@ -129,6 +131,7 @@ def initialize_experiment(prompt_template_dict: dict) -> list:
             ],
             role_column=rendered_prompt_template_dict["role_column"],
             random_seed=rendered_prompt_template_dict["random_seed"],
+            include_backstories=rendered_prompt_template_dict["include_backstories"],
             interview_prompts=rendered_prompt_template_dict["interview_prompts"],
         )
 

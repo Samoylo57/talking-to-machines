@@ -1,20 +1,25 @@
+import argparse, warnings, ast, concurrent.futures, pprint
 import pandas as pd
-import argparse
-import warnings
-import ast
-import concurrent.futures
 from tqdm import tqdm
-from talkingtomachines.interface.validate_template import *
-from talkingtomachines.interface.initialize_experiment import initialize_experiment
+from talkingtomachines.interface.validate_template import (
+    validate_prompt_template_path,
+    validate_experimental_settings_sheet,
+    validate_treatments_sheet,
+    validate_roles_sheet,
+    validate_prompts_sheet,
+    validate_constants_sheet,
+    validate_prompt_template_sheets,
+)
+from talkingtomachines.management.initialize_experiment import initialize_experiment
 from talkingtomachines.management.experiment import AItoAIInterviewExperiment
 from talkingtomachines.config import DevelopmentConfig
 
 PROMPT_TEMPLATE_SHEETS = [
     "experimental_setting",
     "treatments",
-    "agent_roles",
+    "roles",
     "interview_prompts",
-    "agent_profiles",
+    "demographic_profiles",
     "constants",
 ]
 SPECIAL_ROLES = ["Facilitator", "Summarizer"]
@@ -23,6 +28,13 @@ SUPPORTED_PROMPT_TYPES = [
     "public_question",
     "private_question",
     "discussion",
+]
+BOOLEAN_KEYS = [
+    "include_backstories",
+    "randomize_response_order",
+    "validate_response",
+    "generate_speculation_score",
+    "format_response",
 ]
 
 
@@ -52,6 +64,20 @@ def extract_experimental_setting(file_path: str, sheet_name: str) -> dict:
         experimental_setting_df.columns[0]
     ).to_dict()[experimental_setting_df.columns[1]]
 
+    # Convert string booleans to actual booleans
+    for key in BOOLEAN_KEYS:
+        if key in experimental_setting_dict:
+            val = experimental_setting_dict[key]
+            if isinstance(val, str):
+                v = val.strip().lower()
+                if v == "true":
+                    experimental_setting_dict[key] = True
+                elif v == "false":
+                    experimental_setting_dict[key] = False
+            elif isinstance(val, (int, float)):
+                # treat 0 as False, non-zero as True
+                experimental_setting_dict[key] = bool(val)
+
     return experimental_setting_dict
 
 
@@ -78,10 +104,16 @@ def extract_treatments(file_path: str, sheet_name: str) -> dict:
     treatments_dict = treatments_df.set_index(treatments_df.columns[0]).to_dict()[
         treatments_df.columns[1]
     ]
+    if not treatments_dict:  # No treatments provided
+        treatments_dict = {"No Treatment": ""}
 
     # if the treatment is a string representation of a list, convert it to an actual list
     for label, treatment in treatments_dict.items():
-        if treatment.startswith("[") and treatment.endswith("]"):
+        if (
+            isinstance(treatment, str)
+            and treatment.startswith("[")
+            and treatment.endswith("]")
+        ):
             try:
                 treatments_dict[label] = ast.literal_eval(treatment)
             except (ValueError, SyntaxError) as e:
@@ -93,62 +125,60 @@ def extract_treatments(file_path: str, sheet_name: str) -> dict:
     return {"treatments": treatments_dict}
 
 
-def extract_agent_roles(file_path: str, sheet_name: str) -> dict:
-    """Extracts agent roles from a specified worksheet in the prompt template and return them as a dictionary.
+def extract_roles(file_path: str, sheet_name: str) -> dict:
+    """Extracts roles from a specified worksheet in the prompt template and return them as a dictionary.
 
     Args:
         file_path (str): The file path to the prompt template.
-        sheet_name (str): The name of the sheet within the prompt template that contains the agent roles.
+        sheet_name (str): The name of the sheet within the prompt template that contains the role information.
 
     Returns:
-        dict: A dictionary with a single key "agent_roles" mapping to another dictionary where the keys are the
+        dict: A dictionary with a single key "roles" mapping to another dictionary where the keys are the
               values from the first column of the worksheet and the values are the corresponding values from the
               second column.
 
     Raises:
-        ValueError: If mandatory fields are not present in the agent roles worksheet.
+        ValueError: If mandatory fields are not present in the roles worksheet.
     """
-    # Read the agent role worksheet into a DataFrame
-    agent_roles_df = pd.read_excel(file_path, sheet_name=sheet_name)
+    # Read the roles worksheet into a DataFrame
+    roles_df = pd.read_excel(file_path, sheet_name=sheet_name)
 
-    # Validate the presence of mandatory fields in the treatment worksheet
-    validate_agent_roles_sheet(agent_roles_df)
+    # Validate the presence of mandatory fields in the roles worksheet
+    validate_roles_sheet(roles_df)
 
-    # Convert the agent role worksheet to a dictionary
-    agent_roles_dict = agent_roles_df.set_index(agent_roles_df.columns[0]).to_dict()[
-        agent_roles_df.columns[1]
-    ]
+    # Convert the roles worksheet to a dictionary
+    roles_dict = roles_df.set_index(roles_df.columns[0]).to_dict()[roles_df.columns[1]]
 
-    return {"agent_roles": agent_roles_dict}
+    return {"roles": roles_dict}
 
 
 def parse_text_field(
     text_field: str,
-    agent_list: list,
+    role_list: list,
     task_id: str,
     prompt_type: str,
     is_response_options: bool,
 ) -> dict:
-    """Parses the text for the llm_text and response_options fields, converting them into Python objects and assigning to agent roles.
+    """Parses the text for the llm_text and response_options fields, converting them into Python objects and assigning to roles.
 
     If text_field is a plain string (i.e. not a dictionary literal), this function
-    creates a dictionary where the keys are the agents in agent_list (excluding those in SPECIAL_ROLES)
+    creates a dictionary where the keys are the roles in role_list (excluding those in SPECIAL_ROLES)
     and the value is the plain string.
 
     Otherwise, if text_field is a string representation of a dictionary, it is parsed as a Python dictionary.
 
     Args:
         text_field (str): The text field to parse.
-        agent_list (list): A list of agent names.
+        role_list (list): A list of role names.
         task_id (str): The task ID associated with the llm_text.
         prompt_type (str): The type of the prompt.
         is_response_options (bool): Boolean indicator on whether the function is parsing the text for the llm_text field or response_options field.
 
     Returns:
-        dict: A dictionary mapping agent names to the llm_text.
+        dict: A dictionary mapping roles to the llm_text.
     """
-    # Create list of user-defined agents, excluding the special ones
-    user_defined_agents = [agent for agent in agent_list if agent not in SPECIAL_ROLES]
+    # Create list of user-defined roles, excluding the special roles
+    user_defined_roles = [role for role in role_list if role not in SPECIAL_ROLES]
     if isinstance(text_field, str):
         text_field = text_field.strip()
     else:
@@ -161,27 +191,27 @@ def parse_text_field(
         # If the text starts with "{" and ends with "}", assume it's a dictionary literal.
         if text_field.startswith("{") and text_field.endswith("}"):
             try:
-                agent_prompt_dict = ast.literal_eval(text_field)
+                prompt_dict = ast.literal_eval(text_field)
             except (ValueError, SyntaxError) as e:
                 warnings.warn(
-                    f"Error parsing text field ({text_field}) in Task ID {task_id} as dictionary: {e}. The prompt will be treated as a plain string and assigned to all user-defined agents."
+                    f"Error parsing text field ({text_field}) in Task ID {task_id} as dictionary: {e}. The prompt will be treated as a plain string and assigned to all user-defined roles."
                 )
-                agent_prompt_dict = {agent: text_field for agent in user_defined_agents}
+                prompt_dict = {role: text_field for role in user_defined_roles}
 
-            return agent_prompt_dict
+            return prompt_dict
 
-        # Otherwise, it's a plain string: build a dictionary mapping each user-defined agent to that string.
+        # Otherwise, it's a plain string: build a dictionary mapping each user-defined role to that string.
         else:
             if is_response_options:
                 try:
                     return {
-                        agent: ast.literal_eval(text_field)
-                        for agent in user_defined_agents
+                        role: ast.literal_eval(text_field)
+                        for role in user_defined_roles
                     }
                 except:
-                    return {agent: text_field for agent in user_defined_agents}
+                    return {role: text_field for role in user_defined_roles}
             else:
-                return {agent: text_field for agent in user_defined_agents}
+                return {role: text_field for role in user_defined_roles}
 
     elif prompt_type in ["context", "discussion"]:
         if is_response_options:
@@ -221,7 +251,7 @@ def parse_range_response_options(response_options: dict) -> dict:
     return parsed_response_options
 
 
-def extract_prompts(file_path: str, sheet_name: str, agent_list: list) -> dict:
+def extract_prompts(file_path: str, sheet_name: str, role_list: list) -> dict:
     """Extracts prompts from a specified worksheet in the prompt template and returns them as a dictionary.
 
     This function reads a specified worksheet from the prompt template file, validates the presence
@@ -230,7 +260,7 @@ def extract_prompts(file_path: str, sheet_name: str, agent_list: list) -> dict:
     Args:
         file_path (str): The file path to the prompt template file.
         sheet_name (str): The name of the worksheet to read from the prompt template file.
-        agent_list (list): A list of agent roles to be used in the experiment.
+        role_list (list): A list of roles to be used in the experiment.
 
     Returns:
         dict: A dictionary containing a list of prompts. Each prompt is represented as a dictionary
@@ -266,15 +296,14 @@ def extract_prompts(file_path: str, sheet_name: str, agent_list: list) -> dict:
     for prompt_dict in prompts_list:
         prompt_dict["llm_text"] = parse_text_field(
             text_field=prompt_dict["llm_text"],
-            agent_list=agent_list,
+            role_list=role_list,
             task_id=prompt_dict["task_id"],
             prompt_type=prompt_dict["type"],
             is_response_options=False,
         )
-
         prompt_dict["response_options"] = parse_text_field(
             text_field=prompt_dict["response_options"],
-            agent_list=agent_list,
+            role_list=role_list,
             task_id=prompt_dict["task_id"],
             prompt_type=prompt_dict["type"],
             is_response_options=True,
@@ -282,6 +311,18 @@ def extract_prompts(file_path: str, sheet_name: str, agent_list: list) -> dict:
         prompt_dict["response_options"] = parse_range_response_options(
             prompt_dict["response_options"]
         )
+
+        for key, val in prompt_dict.items():
+            if key in BOOLEAN_KEYS:
+                if isinstance(val, str):
+                    v = val.strip().lower()
+                    if v == "true":
+                        prompt_dict[key] = True
+                    elif v == "false":
+                        prompt_dict[key] = False
+                elif isinstance(val, (int, float)):
+                    # treat 0 as False, non-zero as True
+                    prompt_dict[key] = bool(val)
 
     return {"interview_prompts": prompts_list}
 
@@ -307,7 +348,7 @@ def extract_constants(file_path: str, sheet_name: str) -> dict:
     # Validate the presence of mandatory fields in the constants worksheet
     validate_constants_sheet(constants_df)
 
-    # Convert the agent role worksheet to a dictionary
+    # Convert the roles worksheet to a dictionary
     constants_dict = constants_df.set_index(constants_df.columns[0]).to_dict()[
         constants_df.columns[1]
     ]
@@ -322,8 +363,8 @@ def extract_constants(file_path: str, sheet_name: str) -> dict:
     return {"constants": constants_dict}
 
 
-def extract_agent_profiles(file_path: str, sheet_name: str) -> dict:
-    """Extracts agent profiles from a specified worksheet from the prompt template.
+def extract_demographic_profiles(file_path: str, sheet_name: str) -> dict:
+    """Extracts demographic profiles from a specified worksheet from the prompt template.
 
     Args:
         file_path (str): The file path to the prompt template.
@@ -331,46 +372,64 @@ def extract_agent_profiles(file_path: str, sheet_name: str) -> dict:
 
     Returns:
         dict: A dictionary containing:
-            - "agent_profiles_mapping" (dict): A dictionary mapping of the first row of the sheet.
-            - "agent_profiles" (pd.DataFrame): A DataFrame containing the remaining data with new column headers.
+            - "demographic_profiles_mapping" (dict): A dictionary mapping of the first row of the sheet.
+            - "demographic_profiles" (pd.DataFrame): A DataFrame containing the remaining data with new column headers.
 
     Raises:
-        ValueError: If mandatory fields are not present in the agent_profiles worksheet.
+        ValueError: If mandatory fields are not present in the demographic_profiles worksheet.
     """
     # Read the specified sheet into a DataFrame
-    agent_profiles_df = pd.read_excel(file_path, sheet_name=sheet_name)
+    demographic_profiles_df = pd.read_excel(file_path, sheet_name=sheet_name)
 
     # Extract the first row and convert them to a dictionary
-    agent_profiles_mapping = agent_profiles_df.iloc[0].to_dict()
+    demographic_profiles_mapping = demographic_profiles_df.iloc[0].to_dict()
 
     # Use the first row as the new column headers for the remaining data
-    agent_profiles = agent_profiles_df.iloc[1:].reset_index(drop=True)
-    agent_profiles.columns = agent_profiles_df.iloc[0]
+    demographic_profiles = demographic_profiles_df.iloc[1:].reset_index(drop=True)
+    demographic_profiles.columns = demographic_profiles_df.iloc[0]
 
     return {
-        "agent_profiles_mapping": agent_profiles_mapping,
-        "agent_profiles": agent_profiles,
+        "demographic_profiles_mapping": demographic_profiles_mapping,
+        "demographic_profiles": demographic_profiles,
     }
 
 
 def print_experimental_settings(
     experiment: AItoAIInterviewExperiment, constant_permutation: dict
 ) -> None:
-    """Prints the experimental settings for a given AI to AI interview experiment.
+    """
+    Prints the experimental settings and configuration details for an AI-to-AI interview experiment.
 
     Args:
-        experiment (AItoAIInterviewExperiment): An instance of AItoAIInterviewExperiment containing all the settings and configurations for the experiment.
+        experiment (AItoAIInterviewExperiment): An object containing all relevant experiment parameters and settings.
+        constant_permutation (dict): A dictionary representing constant permutations used in the experiment.
+
+    Returns:
+        None
+
+    The function outputs a formatted summary of the experiment's configuration, including model information,
+    API keys, session and role details, treatment and assignment strategies, random seed, roles,
+    and interview prompts.
     """
+
+    def _format_dict_to_str(d: dict, indent: int = 10) -> str:
+        if not d:
+            return " " * indent + "{}"
+        lines = []
+        for k, v in d.items():
+            lines.append(f"\n{' ' * indent}{k}: {v}")
+        return "\n".join(lines) + "\n"
+
     print(
         """
         Experiment Settings for {experiment_id}:
         {line_separator}
         Model Info: {model_info}
-        Temperature: {temperature}
         Open AI API Key: {openai_api_key}
         HuggingFace API Key: {hf_api_key}
-        API Endpoint (only needed when using HuggingFace Models): {api_endpoint}
-        Number of Agents per Session (Excluding Special Roles like Facilitator and Summarizer): {num_agents_per_session}
+        HF Inference Endpoint (Only applicable when using HuggingFace Models): {hf_inference_endpoint}
+        Temperature: {temperature}
+        Number of Subjects per Session (Excluding Special Roles like Facilitator and Summarizer): {num_subjects_per_session}
         Number of Sessions: {num_sessions}
         Maximum Conversation Length: {max_conversation_length}
         Treatments: {treatments}
@@ -381,8 +440,9 @@ def print_experimental_settings(
         Role Assignment Strategy: {role_assignment_strategy}
         Role Column (Only valid when using manual assignment strategy): {role_column}
         Random Seed: {random_seed}
+        Include Backstories: {include_backstories}
         Constant Permutation: {constant_permutation}
-        Agent Roles: {agent_roles}
+        Roles: {roles}
         Interview Prompts: {interview_prompts}
 
         """.format(
@@ -392,11 +452,11 @@ def print_experimental_settings(
             temperature=experiment.temperature,
             openai_api_key=DevelopmentConfig.OPENAI_API_KEY,
             hf_api_key=DevelopmentConfig.HF_API_KEY,
-            api_endpoint=experiment.api_endpoint,
-            num_agents_per_session=experiment.num_agents_per_session,
+            hf_inference_endpoint=experiment.hf_inference_endpoint,
+            num_subjects_per_session=experiment.num_subjects_per_session,
             num_sessions=experiment.num_sessions,
             max_conversation_length=experiment.max_conversation_length,
-            treatments=experiment.treatments,
+            treatments=_format_dict_to_str(experiment.treatments),
             treatment_assignment_strategy=experiment.treatment_assignment_strategy,
             treatment_column=experiment.treatment_column,
             session_assignment_strategy=experiment.session_assignment_strategy,
@@ -404,8 +464,9 @@ def print_experimental_settings(
             role_assignment_strategy=experiment.role_assignment_strategy,
             role_column=experiment.role_column,
             random_seed=experiment.random_seed,
+            include_backstories=experiment.include_backstories,
             constant_permutation=constant_permutation,
-            agent_roles=experiment.agent_roles,
+            roles=_format_dict_to_str(experiment.roles),
             interview_prompts=experiment.interview_prompts,
         )
     )
@@ -471,9 +532,9 @@ def main():
                     file_path=prompt_template_file_path, sheet_name=sheet_name
                 )
             )
-        elif sheet_name == "agent_roles":
+        elif sheet_name == "roles":
             prompt_template_dict.update(
-                extract_agent_roles(
+                extract_roles(
                     file_path=prompt_template_file_path, sheet_name=sheet_name
                 )
             )
@@ -482,13 +543,13 @@ def main():
                 extract_prompts(
                     file_path=prompt_template_file_path,
                     sheet_name=sheet_name,
-                    agent_list=list(prompt_template_dict["agent_roles"].keys()),
+                    role_list=list(prompt_template_dict["roles"].keys()),
                 )
             )
 
-        elif sheet_name == "agent_profiles":
+        elif sheet_name == "demographic_profiles":
             prompt_template_dict.update(
-                extract_agent_profiles(
+                extract_demographic_profiles(
                     file_path=prompt_template_file_path, sheet_name=sheet_name
                 )
             )
@@ -525,7 +586,7 @@ def main():
         .lower()
     )
     if user_input == "test":
-        print("Experiment has started running (test mode)...")
+        print("Experiment has started running in TEST mode.")
 
         experiment_version = 1
         for experiment in tqdm(experiment_list):
@@ -535,10 +596,10 @@ def main():
                 save_results_as_csv=True,
             )
             experiment_version += 1
-        print("Experiment is completed successfully.")
+        print("Experiment is completed successfully in TEST mode.")
 
     elif user_input == "full":
-        print("Experiment has started running (full mode)...")
+        print("Experiment has started running in FULL mode.")
 
         # Prepare a list of arguments for each experiment
         experiment_args = [
@@ -556,7 +617,7 @@ def main():
             # Update progress bar as each experiment completes
             for _ in tqdm(concurrent.futures.as_completed(futures), total=len(futures)):
                 pass
-        print("Experiment is completed successfully.")
+        print("Experiment is completed successfully in FULL mode.")
 
     else:
         print("Experiment is terminated by the user.")

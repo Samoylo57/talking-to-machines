@@ -22,7 +22,7 @@ constants              ← contains the string/numerical constants that can be 
 |`experimental_setting`|**Yes**| Serves as the header for the **14 canonical keys** listed below. Expected value: 'value'.|
 |`experiment_id`|**Yes**|The unique identifier that will be assigned to the experiment. This will also be used when naming the output files after the experiment completes (e.g., <experiment_id>.json and <experiment_id>.csv).|
 |`model_info`|**Yes**|The LLM that will be used in the experiment. Currently, only the LLMs from OpenAI and Hugging Face is supported. Expected values: 'gpt-4.5-preview', 'o3', 'o4-mini', 'o1-pro', 'o1', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4o' 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo', 'hf-inference' (when using Hugging Face inference API). If the model chosen falls outside of this list, a warning will be reflected and defaults to using the OpenAI API. |
-|`api_endpoint`|**Optional**|Refers to the API endpoint generated when deploying a Hugging Face Inference Endpoint. This field is only required when choosing 'hf-inference' in `model_info`.|
+|`hf_inference_endpoint`|**Optional**|Refers to the API inference endpoint generated when deploying a Hugging Face Inference Endpoint. This field is only required when choosing 'hf-inference' in `model_info`.|
 |`temperature`|**Yes**|The temperature setting that will be applied to the LLM. Expected values: Any value between 0-2 (inclusive).|
 |`num_agents_per_session`|**Yes**|The number of user-defined agents that is assigned to each session. Excludes special agent roles like 'Summarizer' and 'Facilitator'.|
 |`num_sessions`|**Yes**|The number of sessions that will be conducted during the experiment.|

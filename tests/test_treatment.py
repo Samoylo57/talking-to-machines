@@ -1,7 +1,6 @@
 from talkingtomachines.management.treatment import (
     simple_random_assignment_session,
     complete_random_assignment_session,
-    full_factorial_assignment_session,
 )
 from itertools import product
 

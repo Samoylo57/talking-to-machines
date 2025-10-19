@@ -1,9 +1,9 @@
-def generate_report(metrics: dict) -> dict:
-    """Generate a report based on the provided metrics."""
+def visualise_results(metrics: dict) -> dict:
+    """Generate visualisations based on the generated results."""
     try:
-        # Implement report generation functionality
+        # Implement result visualisation functionality
         pass
     except Exception as e:
         # Log the exception
-        print(f"Error during report generation: {e}")
+        print(f"Error during report visualisation: {e}")
         return {}

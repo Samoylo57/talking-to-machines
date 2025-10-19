@@ -1,10 +1,7 @@
-import re
-import warnings
-import openai
-import json
+import re, warnings, openai, json
 from typing import Any, Callable
 from talkingtomachines.generative.prompt import (
-    generate_conversational_agent_system_message,
+    generate_subject_system_message,
     generate_profile_prompt,
 )
 from talkingtomachines.generative.llm import query_llm
@@ -13,34 +10,39 @@ from talkingtomachines.config import DevelopmentConfig
 ProfileInfo = dict[str, Any]
 NUM_RETRY = 3
 OPENAI_MODELS = [
-    "gpt-4.5-preview",
-    "o3",
-    "o4-mini",
-    "o1-pro",
-    "o1",
+    "gpt-5",
+    "gpt-5-mini",
+    "gpt-5-nano",
+    "gpt-5-chat-latest",
+    "gpt-5-codex",
+    "gpt-5-pro",
     "gpt-4.1",
     "gpt-4.1-mini",
     "gpt-4.1-nano",
     "gpt-4o",
+    "gpt-4o-2024-05-13",
     "gpt-4o-mini",
-    "gpt-4-turbo",
-    "gpt-4",
-    "gpt-3.5-turbo",
+    "o1",
+    "o1-pro",
+    "o3-pro",
+    "o3",
+    "o4-mini",
 ]
 
 
-class SyntheticAgent:
-    """A class for constructing the base synthetic agent.
+class SyntheticSubject:
+    """A class for constructing the base synthetic subject.
 
     Args:
         experiment_id (str): The ID of the experiment.
         experiment_context (str): The context of the experiment.
         session_id (Any): The ID of the session.
-        profile_info (ProfileInfo): The profile information of the user.
-        model_info (str): The information about the model used by the agent.
-        temperature (float): The model temperature setting for the agent.
-        api_endpoint (str, optional): API endpoint to the LLM model if the model is hosted externally.
-        profile_prompt_generator (Callable[[ProfileInfo], str], optional):
+        profile_info (ProfileInfo): The profile information of the subject.
+        model_info (str): The information about the model used by the subject.
+        temperature (float): The model temperature setting for the subject.
+        include_backstories (bool): Whether to include backstories in the profile prompt.
+        hf_inference_endpoint (str, optional): API inference endpoint to the LLM model hosted externally in HuggingFace.
+        profile_prompt_generator (Callable[[ProfileInfo, bool, openai.OpenAI, str, float], str], optional):
             A function that generates a profile prompt based on the profile information.
             Defaults to generate_profile_prompt.
 
@@ -48,11 +50,12 @@ class SyntheticAgent:
         experiment_id (str): The ID of the experiment.
         experiment_context (str): The context of the experiment.
         session_id (Any): The ID of the session.
-        profile_info (ProfileInfo): The profile information of the user.
-        profile_prompt (str): A prompt string containing the profile information of the user.
-        model_info (str): The information about the model used by the agent.
-        temperature (float): The model temperature setting for the agent.
-        api_endpoint (str): API endpoint to the LLM model if the model is hosted externally.
+        profile_info (ProfileInfo): The profile information of the subject.
+        profile_prompt (str): A prompt string containing the profile information of the subject.
+        model_info (str): The information about the model used by the subject.
+        temperature (float): The model temperature setting for the subject.
+        include_backstories (bool): Whether to include backstories in the profile prompt.
+        hf_inference_endpoint (str): API inference endpoint to the LLM model hosted externally in HuggingFace.
         llm_client (openai.OpenAI): The LLM client.
     """
 
@@ -64,20 +67,28 @@ class SyntheticAgent:
         profile_info: ProfileInfo,
         model_info: str,
         temperature: float,
-        api_endpoint: str = "",
+        include_backstories: bool,
+        hf_inference_endpoint: str = "",
         profile_prompt_generator: Callable[
-            [ProfileInfo], str
+            [ProfileInfo, bool, openai.OpenAI, str, float], str
         ] = generate_profile_prompt,
     ):
         self.experiment_id = experiment_id
         self.experiment_context = experiment_context
         self.session_id = session_id
         self.profile_info = profile_info
-        self.profile_prompt = profile_prompt_generator(profile_info)
         self.model_info = model_info
         self.temperature = temperature
-        self.api_endpoint = api_endpoint
+        self.include_backstories = include_backstories
+        self.hf_inference_endpoint = hf_inference_endpoint
         self.llm_client = self._initialise_llm_client()
+        self.profile_prompt = profile_prompt_generator(
+            self.profile_info,
+            self.include_backstories,
+            self.llm_client,
+            self.model_info,
+            self.temperature,
+        )
 
     def _initialise_llm_client(self):
         """Initialise a language model client based on the provided model information and API endpoint.
@@ -94,7 +105,8 @@ class SyntheticAgent:
 
         elif self.model_info in ["hf-inference"]:
             return openai.OpenAI(
-                base_url=self.api_endpoint, api_key=DevelopmentConfig.HF_API_KEY
+                base_url=self.hf_inference_endpoint,
+                api_key=DevelopmentConfig.HF_API_KEY,
             )
 
         else:
@@ -104,10 +116,10 @@ class SyntheticAgent:
             return openai.OpenAI(api_key=DevelopmentConfig.OPENAI_API_KEY)
 
     def to_dict(self) -> dict[str, Any]:
-        """Converts the SyntheticAgent object to a dictionary.
+        """Converts the SyntheticSubject object to a dictionary.
 
         Returns:
-            dict[str, Any]: A dictionary representation of the SyntheticAgent object.
+            dict[str, Any]: A dictionary representation of the SyntheticSubject object.
         """
         return {
             "experiment_id": self.experiment_id,
@@ -117,38 +129,41 @@ class SyntheticAgent:
             "profile_prompt": self.profile_prompt,
             "model_info": self.model_info,
             "temperature": self.temperature,
-            "api_endpoint": self.api_endpoint,
+            "include_backstories": self.include_backstories,
+            "hf_inference_endpoint": self.hf_inference_endpoint,
         }
 
     def respond(self) -> str:
-        """Generate a response based on the synthetic agent's model.
+        """Generate a response based on the synthetic subject's model.
 
         Returns:
-            str: The response generated by the synthetic agent
+            str: The response generated by the synthetic subject.
         """
         try:
             return ""
         except Exception as e:
             # Log the exception
-            print(f"Error during response generation in SyntheticAgent object: {e}")
+            print(f"Error during response generation in SyntheticSubject object: {e}")
             return None
 
 
-class ConversationalSyntheticAgent(SyntheticAgent):
-    """A synthetic agent that interacts with users in a conversational system. Inherits from the SyntheticAgent base class.
+class ConversationalSyntheticSubject(SyntheticSubject):
+    """A synthetic subject that interacts with users in a conversational system. Inherits from the SyntheticSubject base class.
 
     Args:
         experiment_id (str): The ID of the experiment.
         experiment_context (str): The context of the experiment.
         session_id (Any): The ID of the session.
-        profile_info (ProfileInfo): The profile information of the user.
-        model_info (str): The information about the model used by the agent.
-        temperature (float): The model temperature setting for the agent.
-        api_endpoint (str, optional): API endpoint to the LLM model if the model is hosted externally.
-        role (str): The name of the role assigned to the agent.
-        role_description (str): The description of the role assigned to the agent.
+        profile_info (ProfileInfo): The profile information of the subject.
+        model_info (str): The information about the model used by the subject.
+        temperature (float): The model temperature setting for the subject.
+        include_backstories (bool): Whether to include backstories in the profile prompt.
+        hf_inference_endpoint (str, optional): API inference endpoint to the LLM model hosted externally in HuggingFace.
+        role (str): The name of the role assigned to the subject.
+        role_description (str): The description of the role assigned to the subject.
         treatment (str): The treatment assigned to the session.
-        profile_prompt_generator (Callable[[ProfileInfo], str], optional):
+        include_backstories (bool): Whether to include backstories in the profile prompt.
+        profile_prompt_generator (Callable[[ProfileInfo, bool, openai.OpenAI, str, float], str], optional):
             A function that generates a profile prompt based on the profile information.
             Defaults to generate_profile_prompt.
 
@@ -156,17 +171,18 @@ class ConversationalSyntheticAgent(SyntheticAgent):
         experiment_id (str): The ID of the experiment.
         experiment_context (str): The context of the experiment.
         session_id (Any): The ID of the session.
-        profile_info (ProfileInfo): The profile information of the user.
-        profile_prompt (str): A prompt string containing the profile information of the user.
-        model_info (str): The information about the model used by the agent.
-        temperature (float): The model temperature setting for the agent.
-        api_endpoint (str): API endpoint to the LLM model if the model is hosted externally.
-        role (str): The name of the role assigned to the agent.
-        role_description (str): The description of the role assigned to the agent.
+        profile_info (ProfileInfo): The profile information of the subject.
+        profile_prompt (str): A prompt string containing the profile information of the subject.
+        model_info (str): The information about the model used by the subject.
+        temperature (float): The model temperature setting for the subject.
+        include_backstories (bool): Whether to include backstories in the profile prompt.
+        hf_inference_endpoint (str): API inference endpoint to the LLM model hosted externally in HuggingFace.
+        role (str): The name of the role assigned to the subject.
+        role_description (str): The description of the role assigned to the subject.
         treatment (str): The treatment assigned to the session.
         system_message (str): The system message generated for the conversation.
         llm_client (openai.OpenAI): The LLM client.
-        message_history (List[dict]): The history of the conversation with the synthetic agent.
+        message_history (List[dict]): The history of the conversation with the synthetic subject.
     """
 
     def __init__(
@@ -177,12 +193,13 @@ class ConversationalSyntheticAgent(SyntheticAgent):
         profile_info: ProfileInfo,
         model_info: str,
         temperature: float,
-        api_endpoint: str,
+        include_backstories: bool,
+        hf_inference_endpoint: str,
         role: str,
         role_description: str,
         treatment: str,
         profile_prompt_generator: Callable[
-            [ProfileInfo], str
+            [ProfileInfo, bool, openai.OpenAI, str, float], str
         ] = generate_profile_prompt,
     ):
         super().__init__(
@@ -192,25 +209,26 @@ class ConversationalSyntheticAgent(SyntheticAgent):
             profile_info,
             model_info,
             temperature,
-            api_endpoint,
+            include_backstories,
+            hf_inference_endpoint,
             profile_prompt_generator,
         )
         self.role = role
         self.role_description = role_description
         self.treatment = treatment
-        self.system_message = generate_conversational_agent_system_message(
-            experiment_context=self.experiment_context,
+        self.include_backstories = include_backstories
+        self.system_message = generate_subject_system_message(
             treatment=self.treatment,
             role_description=self.role_description,
             profile_prompt=self.profile_prompt,
         )
-        self.message_history = []
+        self.message_history = [{"role": "system", "content": self.system_message}]
 
     def to_dict(self) -> dict[str, Any]:
-        """Converts the ConversationalSyntheticAgent object to a dictionary.
+        """Converts the ConversationalSyntheticSubject object to a dictionary.
 
         Returns:
-            dict[str, Any]: A dictionary representation of the ConversationalSyntheticAgent object.
+            dict[str, Any]: A dictionary representation of the ConversationalSyntheticSubject object.
         """
         return {
             "experiment_id": self.experiment_id,
@@ -220,7 +238,8 @@ class ConversationalSyntheticAgent(SyntheticAgent):
             "profile_prompt": self.profile_prompt,
             "model_info": self.model_info,
             "temperature": self.temperature,
-            "api_endpoint": self.api_endpoint,
+            "include_backstories": self.include_backstories,
+            "hf_inference_endpoint": self.hf_inference_endpoint,
             "role": self.role,
             "role_description": self.role_description,
             "treatment": self.treatment,
@@ -229,7 +248,7 @@ class ConversationalSyntheticAgent(SyntheticAgent):
         }
 
     def _build_message_history(self, message_history: list[dict]) -> list[dict]:
-        """Builds and formats the message history for a conversational agent.
+        """Builds and formats the message history for a conversational synthetic subject.
 
         Args:
             message_history (list[dict]): A list of dictionaries representing the
@@ -243,23 +262,23 @@ class ConversationalSyntheticAgent(SyntheticAgent):
                 user/assistant messages. Messages from other participants are
                 prefixed with their role in the content.
         """
-        formatted_message_history = [
-            {"role": "system", "content": self.system_message},
-        ]
+        formatted_message_history = []
 
         for message in message_history:
             role = list(message.keys())[0]
             role_response = list(message.values())[0]
 
             if role == "system":
-                continue
+                formatted_message_history.append(
+                    {"role": "system", "content": role_response}
+                )
 
             elif role == self.role:
                 formatted_message_history.append(
                     {"role": "assistant", "content": role_response}
                 )
 
-            else:  # Other participants in the same session
+            else:  # Other conversations in the same session
                 formatted_message_history.append(
                     {"role": "user", "content": f"{role}: {role_response}"}
                 )
@@ -283,9 +302,7 @@ class ConversationalSyntheticAgent(SyntheticAgent):
             pass
 
         # Build a list of valid options as strings.
-        if isinstance(response_options, range):
-            options = [str(opt) for opt in response_options]
-        elif isinstance(response_options, list):
+        if isinstance(response_options, range) or isinstance(response_options, list):
             options = [str(opt) for opt in response_options]
         else:
             return True
@@ -298,37 +315,46 @@ class ConversationalSyntheticAgent(SyntheticAgent):
         return False
 
     def _insert_formatting_instruction(
-        self, generate_speculation_score: str, format_response: str
+        self, generate_speculation_score: bool, format_response: bool
     ) -> None:
-        """Inserts a formatting instruction into the most recent facilitator message in the message history,
-        based on the specified flags for generating a speculation score and formatting the response.
+        """
+        Appends a formatting instruction to the most recent facilitator message in the message history,
+        based on the specified flags.
 
-        Args:
-            generate_speculation_score (str): A flag indicating whether to include a speculation score
-                in the formatting instruction. Expected values are "1" (include) or other (exclude).
-            format_response (str): A flag indicating whether to format the response as a JSON object.
-                Expected values are "1" (format as JSON) or other (exclude).
+        If the last message in `self.message_history` starts with "Facilitator", this method modifies its
+        content by appending a formatting instruction according to the following logic:
+
+        - If both `generate_speculation_score` and `format_response` are True, instructs to reply with a
+          JSON object containing `response`, `reasoning`, and `speculation_score` keys.
+        - If only `generate_speculation_score` is True, instructs to reply in prose and append a
+          speculation score on a new line.
+        - If only `format_response` is True, instructs to reply with a JSON object containing `response`
+          and `reasoning` keys.
+        - If neither flag is True, does nothing.
+
+        Parameters:
+            generate_speculation_score (bool): Whether to include instructions for a speculation score.
+            format_response (bool): Whether to require the response in a specific JSON format.
 
         Returns:
-            None: The method modifies the `message_history` in place. If the most recent message is not
-            from the facilitator or no valid flags are provided, the method exits without making changes.
+            None
         """
         # Only alter the most recent facilitator message.
         if not self.message_history[-1]["content"].startswith("Facilitator"):
             return None
 
-        if generate_speculation_score == "1" and format_response == "1":
+        if generate_speculation_score and format_response:
             formatting_instruction = (
                 "\n\n---\n"
                 "✱ **Formatting Instruction** ✱\n"
                 "Reply **only** with a valid JSON object containing exactly three keys:\n"
                 "  • `response` (string)  – your main answer.\n"
-                "  • `reasoning` (string) – concise explanation of how you arrived at the answer.\n"
+                "  • `reasoning` (string) – concise explanation of how you arrived at the answer in first person narration.\n"
                 "  • `speculation_score` (integer 0‑100) – how speculative the answer is, "
                 "where 0 = not speculative at all and 100 = entirely speculative.\n"
             )
 
-        elif generate_speculation_score == "1":
+        elif generate_speculation_score:
             formatting_instruction = (
                 "\n\n---\n"
                 "✱ **Formatting Instruction** ✱\n"
@@ -336,13 +362,13 @@ class ConversationalSyntheticAgent(SyntheticAgent):
                 "`Speculation Score: <integer 0‑100>`\n"
             )
 
-        elif format_response == "1":
+        elif format_response:
             formatting_instruction = (
                 "\n\n---\n"
                 "✱ **Formatting Instruction** ✱\n"
                 "Reply **only** with a valid JSON object containing exactly two keys:\n"
                 "  • `response`  (string) – your main answer.\n"
-                "  • `reasoning` (string) – concise explanation of how you arrived at the answer.\n"
+                "  • `reasoning` (string) – concise explanation of how you arrived at the answer in first person narration.\n"
             )
 
         else:
@@ -353,27 +379,34 @@ class ConversationalSyntheticAgent(SyntheticAgent):
 
     def respond(
         self,
-        message_history: list[dict],
-        validate_response: str = "0",
+        latest_message_history: list[dict],
+        validate_response: bool = False,
         response_options: Any = [],
-        generate_speculation_score: str = "0",
-        format_response: str = "0",
+        generate_speculation_score: bool = False,
+        format_response: bool = False,
     ) -> str:
-        """Generate a response to a question posed to the synthetic agent.
+        """
+        Generates a response from the conversational synthetic subject based on the provided message history.
 
         Args:
-            message_history (list[dict]): The history of the conversation during the experiment.
-            validate_response (str): Either "0" or "1" to indicate whether to perform response validation or not
-            response_options (Any): A list of options to choose from for the response.
-            generate_speculation_score (str): Either "0" or "1" to indicate whether to generate a speculation score or not.
-            format_response (str): Either "0" or "1" to indicate whether to format the response into a JSON dictionary for easy parsing.
+            latest_message_history (list[dict]): The latest history of messages exchanged in the conversation.
+            validate_response (bool, optional): If True, validates the generated response against the provided response_options. Defaults to False.
+            response_options (Any, optional): Options to validate the response against. Defaults to [].
+            generate_speculation_score (bool, optional): If True, includes instructions to generate a speculation score in the response. Defaults to False.
+            format_response (bool, optional): If True, formats the response according to specific instructions. Defaults to False.
+            is_full_message_history (bool, optional): If True, treats the input from message_history as the full message history; otherwise, appends the input from message_history to
+            its own message_history. Defaults to False.
 
         Returns:
-            str: The response generated by the synthetic agent.
+            str: The generated response from the subject. Returns an empty string if an exception occurs during response generation.
+
+        Raises:
+            Exception: Logs any exception that occurs during response generation and returns an empty string.
         """
-        self.message_history = self._build_message_history(
-            message_history=message_history
+        latest_message_history = self._build_message_history(
+            message_history=latest_message_history
         )
+        self.message_history.extend(latest_message_history)
 
         try:
             self._insert_formatting_instruction(
@@ -381,7 +414,7 @@ class ConversationalSyntheticAgent(SyntheticAgent):
                 format_response=format_response,
             )
 
-            if validate_response == "1":  # Validate response based on response_options
+            if validate_response:  # Validate response based on response_options
                 for _ in range(NUM_RETRY):
                     response = query_llm(
                         llm_client=self.llm_client,
@@ -407,6 +440,6 @@ class ConversationalSyntheticAgent(SyntheticAgent):
         except Exception as e:
             # Log the exception
             print(
-                f"Error during response generation by ConversationalSyntheticAgent object: {e}"
+                f"Error during response generation by ConversationalSyntheticSubject object: {e}"
             )
             return ""

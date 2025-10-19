@@ -1,13 +1,10 @@
+import datetime, random, warnings, concurrent.futures
 import pandas as pd
-import datetime
-import random
-import warnings
-import concurrent.futures
 from collections import defaultdict
 from typing import Any, List
 from tqdm import tqdm
-from talkingtomachines.generative.synthetic_agent import (
-    ConversationalSyntheticAgent,
+from talkingtomachines.generative.synthetic_subject import (
+    ConversationalSyntheticSubject,
     ProfileInfo,
 )
 from talkingtomachines.management.treatment import (
@@ -16,30 +13,33 @@ from talkingtomachines.management.treatment import (
     manual_assignment_session,
 )
 from talkingtomachines.generative.prompt import (
-    generate_conversational_session_system_message,
+    generate_session_system_message,
 )
 from talkingtomachines.storage.experiment import save_experiment
 
 SUPPORTED_MODELS = [
-    "gpt-4.5-preview",
-    "o3",
-    "o4-mini",
-    "o1-pro",
-    "o1",
+    "gpt-5",
+    "gpt-5-mini",
+    "gpt-5-nano",
+    "gpt-5-chat-latest",
+    "gpt-5-codex",
+    "gpt-5-pro",
     "gpt-4.1",
     "gpt-4.1-mini",
     "gpt-4.1-nano",
     "gpt-4o",
+    "gpt-4o-2024-05-13",
     "gpt-4o-mini",
-    "gpt-4-turbo",
-    "gpt-4",
-    "gpt-3.5-turbo",
+    "o1",
+    "o1-pro",
+    "o3-pro",
+    "o3",
+    "o4-mini",
     "hf-inference",
 ]
 SUPPORTED_TREATMENT_ASSIGNMENT_STRATEGIES = [
     "simple_random",
     "complete_random",
-    # "full_factorial",
     "manual",
 ]
 SUPPORTED_SESSION_ASSIGNMENT_STRATEGIES = [
@@ -94,21 +94,22 @@ class AIConversationalExperiment(Experiment):
     specific to AI conversational experiments.
 
     Args:
-        model_info (str): The information about the AI model used in the experiment.
+        model_info (str): The information about the LLM used in the experiment.
         temperature (float): The temperature setting that will be applied to the LLM.
-        agent_profiles (pd.DataFrame): The profile information of the agents participating in the experiment.
+        demographic_profiles (pd.DataFrame): The profile information of the subjects participating in the experiment.
         experiment_context (str, optional): The context or purpose of the experiment. Defaults to an empty string
         experiment_id (str, optional): The unique ID of the experiment. Defaults to an empty string.
-        api_endpoint (str, optional): The API endpoint for the HuggingFace model. Defaults to an empty string.
+        hf_inference_endpoint (str, optional): The API inference endpoint for the HuggingFace model. Defaults to an empty string.
         max_conversation_length (int, optional): The maximum length of a conversation. Defaults to 10.
         treatments (dict[str, Any], optional): The treatments for the experiment. Defaults to an empty dictionary.
-        treatment_assignment_strategy (str, optional): The strategy used for assigning treatments to agents. Defaults to "simple_random".
-        treatment_column (str, optional): The column in agent_profiles that contains the manually assigned treatments. Defaults to an empty string.
-        session_assignment_strategy (str, optional): The strategy used for assigning agents to sessions. Defaults to "random".
-        session_column (str, optional): The column in agent_profiles that contains the manually assigned sessions. Defaults to an empty string.
-        role_assignment_strategy (str, optional): The strategy used for assigning agents to sessions. Defaults to "random".
-        role_column (str, optional): The column in agent_profiles that contains the manually assigned role. Defaults to an empty string.
+        treatment_assignment_strategy (str, optional): The strategy used for assigning treatments to subjects. Defaults to "simple_random".
+        treatment_column (str, optional): The column in demographic_profiles that contains the manually assigned treatments. Defaults to an empty string.
+        session_assignment_strategy (str, optional): The strategy used for assigning subjects to sessions. Defaults to "random".
+        session_column (str, optional): The column in demographic_profiles that contains the manually assigned sessions. Defaults to an empty string.
+        role_assignment_strategy (str, optional): The strategy used for assigning subjects to sessions. Defaults to "random".
+        role_column (str, optional): The column in demographic_profiles that contains the manually assigned role. Defaults to an empty string.
         random_seed (int, optional): The random seed for reproducibility. Defaults to 42.
+        include_backstories (bool, optional): Whether to include backstories in the subject profiles. Defaults to False.
 
     Raises:
         ValueError: If the provided model_info is not supported.
@@ -116,36 +117,37 @@ class AIConversationalExperiment(Experiment):
         ValueError: If the provided treatment_assignment_strategy is not supported.
         ValueError: If the provided session_assignment_strategy is not supported.
         ValueError: If the provided role_assignment_strategy is not supported.
-        ValueError: If the provided agent_profiles is an empty DataFrame or does not contain a 'ID' column.
+        ValueError: If the provided demographic_profiles is an empty DataFrame or does not contain a 'ID' column.
         ValueError: If the provided max_conversation_length is lesser than 5.
         ValueError: If the provided treatment is not in the nested dictionary structure when treatment_assignment_strategy is 'full_factorial'.
 
     Attributes:
-        model_info (str): The information about the AI model used in the experiment.
+        model_info (str): The information about the LLM used in the experiment.
         temperature (float): The temperature setting that will be applied to the LLM.
-        agent_profiles (pd.DataFrame): The profile information of the agents participating in the experiment.
+        demographic_profiles (pd.DataFrame): The profile information of the subjects participating in the experiment.
         experiment_context (str): The context or purpose of the experiment.
         experiment_id (str): The unique ID of the experiment.
-        api_endpoint (str, optional): The API endpoint for the HuggingFace model.
+        hf_inference_endpoint (str, optional): The API inference endpoint for the HuggingFace model.
         max_conversation_length (int): The maximum length of a conversation.
         treatments (dict[str, Any]): The treatments for the experiment.
-        treatment_assignment_strategy (str): The strategy used for assigning treatments to agents.
-        treatment_column (str, optional): The column in agent_profiles that contains the manually assigned treatments.
-        session_assignment_strategy (str, optional): The strategy used for assigning agents to sessions.
-        session_column (str, optional): The column in agent_profiles that contains the manually assigned sessions.
-        role_assignment_strategy (str, optional): The strategy used for assigning agents to sessions.
-        role_column (str, optional): The column in agent_profiles that contains the manually assigned sessions.
+        treatment_assignment_strategy (str): The strategy used for assigning treatments to subjects.
+        treatment_column (str, optional): The column in demographic_profiles that contains the manually assigned treatments.
+        session_assignment_strategy (str, optional): The strategy used for assigning subjects to sessions.
+        session_column (str, optional): The column in demographic_profiles that contains the manually assigned sessions.
+        role_assignment_strategy (str, optional): The strategy used for assigning subjects to sessions.
+        role_column (str, optional): The column in demographic_profiles that contains the manually assigned sessions.
         random_seed (int, optional): The random seed for reproducibility.
+        include_backstories (bool, optional): Whether to include backstories in the subjects profiles.
     """
 
     def __init__(
         self,
         model_info: str,
         temperature: float,
-        agent_profiles: pd.DataFrame,
+        demographic_profiles: pd.DataFrame,
         experiment_context: str = "",
         experiment_id: str = "",
-        api_endpoint: str = "",
+        hf_inference_endpoint: str = "",
         max_conversation_length: int = 10,
         treatments: dict[str, Any] = {},
         treatment_assignment_strategy: str = "simple_random",
@@ -155,6 +157,7 @@ class AIConversationalExperiment(Experiment):
         role_assignment_strategy: str = "random",
         role_column: str = "",
         random_seed: int = 42,
+        include_backstories: bool = False,
     ):
         super().__init__(
             experiment_id,
@@ -163,8 +166,10 @@ class AIConversationalExperiment(Experiment):
         self.model_info = self._check_model_info(model_info=model_info)
         self.temperature = self._check_temperature(temperature=temperature)
         self.experiment_context = experiment_context
-        self.agent_profiles = self._check_agent_profiles(agent_profiles=agent_profiles)
-        self.api_endpoint = api_endpoint
+        self.demographic_profiles = self._check_demographic_profiles(
+            demographic_profiles=demographic_profiles
+        )
+        self.hf_inference_endpoint = hf_inference_endpoint
         self.max_conversation_length = self._check_max_conversation_length(
             max_conversation_length=max_conversation_length
         )
@@ -172,6 +177,7 @@ class AIConversationalExperiment(Experiment):
         self.treatment_assignment_strategy = self._check_treatment_assignment_strategy(
             treatment_assignment_strategy=treatment_assignment_strategy,
             treatment_column=treatment_column,
+            session_assignment_strategy=session_assignment_strategy,
         )
         self.treatment_column = treatment_column
         self.session_assignment_strategy = self._check_session_assignment_strategy(
@@ -184,6 +190,7 @@ class AIConversationalExperiment(Experiment):
         )
         self.role_column = role_column
         self.random_seed = random_seed
+        self.include_backstories = include_backstories
 
     def _check_model_info(self, model_info: str) -> str:
         """Checks if the provided model_info is supported.
@@ -199,8 +206,9 @@ class AIConversationalExperiment(Experiment):
         """
         if model_info not in SUPPORTED_MODELS:
             warnings.warn(
-                f"{model_info} is not one of the supported models ({SUPPORTED_MODELS}). Defaulting to querying OpenAI endpoint."
+                f"{model_info} is not one of the supported models ({SUPPORTED_MODELS}). Defaulting to querying OpenAI model {SUPPORTED_MODELS[0]}."
             )
+            return SUPPORTED_MODELS[0]
 
         return model_info
 
@@ -238,25 +246,29 @@ class AIConversationalExperiment(Experiment):
         # Otherwise, return the provided temperature as a float
         return float(temperature)
 
-    def _check_agent_profiles(self, agent_profiles: pd.DataFrame) -> pd.DataFrame:
-        """Checks to ensure that provided agent_profiles is not empty and contains a ID column.
+    def _check_demographic_profiles(
+        self, demographic_profiles: pd.DataFrame
+    ) -> pd.DataFrame:
+        """Checks to ensure that provided demographic_profiles is not empty and contains a ID column.
 
         Args:
-            agent_profiles (pd.DataFrame): The agent_profiles to be checked.
+            demographic_profiles (pd.DataFrame): The demographic profiles to be checked.
 
         Returns:
-            str: The validated agent_profiles.
+            str: The validated demographic_profiles.
 
         Raises:
-            ValueError: If the provided agent_profiles is an empty dataframe or if it does not contain an ID column.
+            ValueError: If the provided demographic_profiles is an empty dataframe or if it does not contain an ID column.
         """
-        if agent_profiles.empty:
-            raise ValueError("agent_profiles DataFrame cannot be empty.")
+        if demographic_profiles.empty:
+            raise ValueError("demographic_profiles DataFrame cannot be empty.")
 
-        if "ID" not in agent_profiles.columns:
-            raise ValueError("agent_profiles DataFrame should contain an 'ID' column.")
+        if "ID" not in demographic_profiles.columns:
+            raise ValueError(
+                "demographic_profiles DataFrame should contain an 'ID' column."
+            )
 
-        return agent_profiles
+        return demographic_profiles
 
     def _check_max_conversation_length(self, max_conversation_length: int) -> int:
         """Checks if the provided max_conversation is an integer greater than or equal to 1.
@@ -301,20 +313,8 @@ class AIConversationalExperiment(Experiment):
         self,
         treatment_assignment_strategy: str,
         treatment_column: str,
+        session_assignment_strategy: str,
     ) -> str:
-        """Checks if the provided treatment_assignment_strategy is supported.
-
-        Args:
-            treatment_assignment_strategy (str): The treatment_assignment_strategy to be checked.
-            treatment_column (str): The column name containing information about the manually assigned treatments.
-
-        Returns:
-            str: The validated treatment_assignment_strategy.
-
-        Raises:
-            ValueError: If the provided treatment_assignment_strategy is not supported.
-            ValueError: If treatment_column is an empty string or not one of the columns in agent_profiles when using the manual treatment assignment strategy.
-        """
         if (
             treatment_assignment_strategy
             not in SUPPORTED_TREATMENT_ASSIGNMENT_STRATEGIES
@@ -323,14 +323,19 @@ class AIConversationalExperiment(Experiment):
                 f"Unsupported treatment_assignment_strategy: {treatment_assignment_strategy}. Supported strategies are: {SUPPORTED_TREATMENT_ASSIGNMENT_STRATEGIES}."
             )
 
-        # Check that treatment_column and session_column can be found in agent_profiles when using manual treatment assignment
+        # Check that treatment_column and session_column can be found in demographic_profiles when using manual treatment assignment
         if treatment_assignment_strategy == "manual":
             if (
                 treatment_column == ""
-                or treatment_column not in self.agent_profiles.columns
+                or treatment_column not in self.demographic_profiles.columns
             ):
                 raise ValueError(
-                    f"The argument 'treatment_column' cannot be an empty string and must be one of the columns in agent_profiles when using manual treatment assignment."
+                    f"The argument 'treatment_column' cannot be an empty string and must be one of the columns in demographic_profiles when using manual treatment assignment."
+                )
+
+            if session_assignment_strategy != "manual":
+                raise ValueError(
+                    f"When using manual treatment assignment, session assignment strategy must also be 'manual' to ensure that subjects in the same session experienced the same treatment arm."
                 )
 
         return treatment_assignment_strategy
@@ -349,21 +354,21 @@ class AIConversationalExperiment(Experiment):
 
         Raises:
             ValueError: If the provided session_assignment_strategy is not supported.
-            ValueError: If session_column is an empty string or not one of the columns in agent_profiles when using the manual session assignment strategy.
+            ValueError: If session_column is an empty string or not one of the columns in demographic_profiles when using the manual session assignment strategy.
         """
         if session_assignment_strategy not in SUPPORTED_SESSION_ASSIGNMENT_STRATEGIES:
             raise ValueError(
                 f"Unsupported session_assignment_strategy: {session_assignment_strategy}. Supported strategies are: {SUPPORTED_SESSION_ASSIGNMENT_STRATEGIES}."
             )
 
-        # Check that session_column can be found in agent_profiles when using manual session assignment
+        # Check that session_column can be found in demographic_profiles when using manual session assignment
         if session_assignment_strategy == "manual":
             if (
                 session_column == ""
-                or session_column not in self.agent_profiles.columns
+                or session_column not in self.demographic_profiles.columns
             ):
                 raise ValueError(
-                    f"The argument 'session_column' cannot be an empty string and must be one of the columns in agent_profiles when performing manual session assignment."
+                    f"The argument 'session_column' cannot be an empty string and must be one of the columns in demographic_profiles when performing manual session assignment."
                 )
 
         return session_assignment_strategy
@@ -382,18 +387,21 @@ class AIConversationalExperiment(Experiment):
 
         Raises:
             ValueError: If the provided role_assignment_strategy is not supported.
-            ValueError: If role_column is an empty string or not one of the columns in agent_profiles when using the manual role assignment strategy.
+            ValueError: If role_column is an empty string or not one of the columns in demographic_profiles when using the manual role assignment strategy.
         """
         if role_assignment_strategy not in SUPPORTED_ROLE_ASSIGNMENT_STRATEGIES:
             raise ValueError(
                 f"Unsupported role_assignment_strategy: {role_assignment_strategy}. Supported strategies are: {SUPPORTED_ROLE_ASSIGNMENT_STRATEGIES}."
             )
 
-        # Check that role_column can be found in agent_profiles when using manual role assignment
+        # Check that role_column can be found in demographic_profiles when using manual role assignment
         if role_assignment_strategy == "manual":
-            if role_column == "" or role_column not in self.agent_profiles.columns:
+            if (
+                role_column == ""
+                or role_column not in self.demographic_profiles.columns
+            ):
                 raise ValueError(
-                    f"The argument 'role_column' cannot be an empty string and must be one of the columns in agent_profiles when performing manual role assignment."
+                    f"The argument 'role_column' cannot be an empty string and must be one of the columns in demographic_profiles when performing manual role assignment."
                 )
 
         return role_assignment_strategy
@@ -406,24 +414,25 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
     specific to AI-to-AI conversational experiments.
 
     Args:
-        model_info (str): The information about the AI model used in the experiment.
+        model_info (str): The information about the LLM used in the experiment.
         temperature (float): The temperature setting that will be applied to the LLM.
-        agent_profiles (pd.DataFrame): The profile information of the agents participating in the experiment.
-        agent_roles (dict[str, str]): Dictionary mapping agent roles to their descriptions.
-        num_agents_per_session (int, optional): Number of agents per session. Defaults to 2.
-        num_sessions (int, optional): Number of sessions. Defaults to 10.
+        demographic_profiles (pd.DataFrame): The profile information of the subjects participating in the experiment.
+        roles (dict[str, str]): Dictionary mapping roles to their descriptions.
+        num_subjects_per_session (int, optional): Number of subjects per session. Defaults to 2.
+        num_sessions (int, optional): Number of sessions. Defaults to 1.
         experiment_context (str, optional): The context or purpose of the experiment. Defaults to an empty string.
         experiment_id (str, optional): The unique ID of the experiment. Defaults to an empty string.
-        api_endpoint (str, optional): The API endpoint for the HuggingFace model. Defaults to an empty string.
+        hf_inference_endpoint (str, optional): The API inference endpoint for the HuggingFace model. Defaults to an empty string.
         max_conversation_length (int, optional): The maximum length of a conversation. Defaults to 10.
         treatments (dict[str, Any], optional): The treatments for the experiment. Defaults to an empty dictionary.
-        treatment_assignment_strategy (str, optional): The strategy used for assigning treatments to agents. Defaults to "simple_random".
-        treatment_column (str, optional): The column in agent_profiles that contains the manually assigned treatments. Defaults to an empty string.
-        session_assignment_strategy (str, optional): The strategy used for assigning agents to sessions. Defaults to "random".
-        session_column (str, optional): The column in agent_profiles that contains the manually assigned sessions. Defaults to an empty string.
-        role_assignment_strategy (str, optional): The strategy used for assigning agents to sessions. Defaults to "random".
-        role_column (str, optional): The column in agent_profiles that contains the manually assigned role. Defaults to an empty string.
+        treatment_assignment_strategy (str, optional): The strategy used for assigning treatments to subjects. Defaults to "simple_random".
+        treatment_column (str, optional): The column in demographic_profiles that contains the manually assigned treatments. Defaults to an empty string.
+        session_assignment_strategy (str, optional): The strategy used for assigning subjects to sessions. Defaults to "random".
+        session_column (str, optional): The column in demographic_profiles that contains the manually assigned sessions. Defaults to an empty string.
+        role_assignment_strategy (str, optional): The strategy used for assigning subjects to sessions. Defaults to "random".
+        role_column (str, optional): The column in demographic_profiles that contains the manually assigned role. Defaults to an empty string.
         random_seed (int, optional): The random seed for reproducibility. Defaults to 42.
+        include_backstories (bool, optional): Whether to include backstories in the subjects profiles. Defaults to False.
 
     Raises:
         ValueError: If the provided model_info is not supported.
@@ -431,36 +440,37 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
         ValueError: If the provided treatment_assignment_strategy is not supported.
         ValueError: If the provided session_assignment_strategy is not supported.
         ValueError: If the provided role_assignment_strategy is not supported.
-        ValueError: If the provided agent_profiles is an empty DataFrame or does not contain a 'ID' column.
+        ValueError: If the provided demographic_profiles is an empty DataFrame or does not contain a 'ID' column.
         ValueError: If the provided max_conversation_length is lesser than 5.
         ValueError: If the provided treatment is not in the nested dictionary structure when treatment_assignment_strategy is 'full_factorial'.
         ValueError: If the provided num_sessions is not valid.
-        ValueError: If the provided num_agents_per_session is less than 2 or will exceed the total number of profile information.
-        ValueError: If the provided number of agent_roles is not equal to num_agents_per_session.
-        ValueError: If the number of roles defined does not match the number of agents assigned to each session.
+        ValueError: If the provided num_subjects_per_session is less than 2 or will exceed the total number of profile information.
+        ValueError: If the provided number of roles is not equal to num_subjects_per_session.
+        ValueError: If the number of roles defined does not match the number of subjects assigned to each session.
 
     Attributes:
-        model_info (str): The information about the AI model used in the experiment.
+        model_info (str): The information about the LLM used in the experiment.
         temperature (float): The temperature setting that will be applied to the LLM.
-        agent_profiles (pd.DataFrame): The profile information of the agents participating in the experiment.
-        agent_roles (dict[str, str]): The roles assigned to agents.
-        num_agents_per_session (int): The number of agents per session.
+        demographic_profiles (pd.DataFrame): The profile information of the subjects participating in the experiment.
+        roles (dict[str, str]): The roles assigned to subjects.
+        num_subjects_per_session (int): The number of subjects per session.
         num_sessions (int): The number of sessions in the experiment.
         experiment_context (str): The context or purpose of the experiment.
         experiment_id (str): The unique ID of the experiment.
-        api_endpoint (str, optional): The API endpoint for the HuggingFace model.
+        hf_inference_endpoint (str, optional): The API inference endpoint for the HuggingFace model.
         max_conversation_length (int): The maximum length of a conversation.
         treatments (dict[str, Any]): The treatments for the experiment.
-        treatment_assignment_strategy (str): The strategy used for assigning treatments to agents.
-        treatment_column (str, optional): The column in agent_profiles that contains the manually assigned treatments.
-        session_assignment_strategy (str, optional): The strategy used for assigning agents to sessions.
-        session_column (str, optional): The column in agent_profiles that contains the manually assigned sessions.
-        role_assignment_strategy (str, optional): The strategy used for assigning agents to sessions.
-        role_column (str, optional): The column in agent_profiles that contains the manually assigned sessions.
+        treatment_assignment_strategy (str): The strategy used for assigning treatments to subjects.
+        treatment_column (str, optional): The column in demographic_profiles that contains the manually assigned treatments.
+        session_assignment_strategy (str, optional): The strategy used for assigning subjects to sessions.
+        session_column (str, optional): The column in demographic_profiles that contains the manually assigned sessions.
+        role_assignment_strategy (str, optional): The strategy used for assigning subjects to sessions.
+        role_column (str, optional): The column in demographic_profiles that contains the manually assigned sessions.
         random_seed (int, optional): The random seed for reproducibility.
+        include_backstories (bool, optional): Whether to include backstories in the subject's profiles.
         session_id_list (list): A list of session IDs generated based on the number of sessions.
         treatment_assignment (dict[Any, str]): A dictionary mapping session IDs to treatment labels.
-        session_assignment (dict[Any, list[ProfileInfo]]): A dictionary mapping session IDs to a list of agent profile information.
+        session_assignment (dict[Any, list[ProfileInfo]]): A dictionary mapping session IDs to a list of profile information.
         role_assignment (dict[Any, str]): A dictionary mapping user IDs to a specified role.
     """
 
@@ -468,13 +478,13 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
         self,
         model_info: str,
         temperature: float,
-        agent_profiles: pd.DataFrame,
-        agent_roles: dict[str, str],
-        num_agents_per_session: int = 2,
-        num_sessions: int = 10,
+        demographic_profiles: pd.DataFrame,
+        roles: dict[str, str],
+        num_subjects_per_session: int = 2,
+        num_sessions: int = 1,
         experiment_context: str = "",
         experiment_id: str = "",
-        api_endpoint: str = "",
+        hf_inference_endpoint: str = "",
         max_conversation_length: int = 10,
         treatments: dict[str, Any] = {},
         treatment_assignment_strategy: str = "simple_random",
@@ -484,14 +494,15 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
         role_assignment_strategy: str = "random",
         role_column: str = "",
         random_seed: int = 42,
+        include_backstories: bool = False,
     ):
         super().__init__(
             model_info,
             temperature,
-            agent_profiles,
+            demographic_profiles,
             experiment_context,
             experiment_id,
-            api_endpoint,
+            hf_inference_endpoint,
             max_conversation_length,
             treatments,
             treatment_assignment_strategy,
@@ -501,12 +512,13 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
             role_assignment_strategy,
             role_column,
             random_seed,
+            include_backstories,
         )
 
-        self.agent_roles = agent_roles
+        self.roles = roles
         self.num_sessions = self._check_num_sessions(num_sessions=num_sessions)
-        self.num_agents_per_session = self._check_num_agents_per_session(
-            num_agents_per_session=num_agents_per_session
+        self.num_subjects_per_session = self._check_num_subjects_per_session(
+            num_subjects_per_session=num_subjects_per_session
         )
         self.session_id_list = self._generate_session_id_list()
         self.treatment_assignment = self._assign_treatment(random_seed=self.random_seed)
@@ -517,34 +529,36 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
         if self.role_assignment_strategy == "manual":
             self._check_manually_assigned_roles()
 
-    def _check_num_agents_per_session(self, num_agents_per_session: int) -> int:
-        """Checks if the provided num_agents_per_session is 2 or more and matches with the number of agent profiles provided.
+    def _check_num_subjects_per_session(self, num_subjects_per_session: int) -> int:
+        """Checks if the provided num_subjects_per_session is 2 or more and matches with the number of profiles provided.
 
         Args:
-            num_agents_per_session (int): The num_agents_per_session to be checked.
+            num_subjects_per_session (int): The num_subjects_per_session to be checked.
 
         Returns:
-            int: The validated num_agents_per_session.
+            int: The validated num_subjects_per_session.
 
         Raises:
-            ValueError: If the provided num_agents_per_session is not valid.
+            ValueError: If the provided num_subjects_per_session is not valid.
         """
-        # Check if number of agents per session is 2 or more
-        if num_agents_per_session < 2:
+        # Check if number of subjects per session is 2 or more
+        if num_subjects_per_session < 2:
             raise ValueError(
-                f"Invalid num_agents_per_session: {num_agents_per_session}. For AI-AI conversation-based experiments, num_agents_per_session should be an integer that is equal to or greater than 2."
+                f"Invalid num_subjects_per_session: {num_subjects_per_session}. For AI-AI conversation-based experiments, num_subjects_per_session should be an integer that is equal to or greater than 2."
             )
 
-        # Check if number of agents per session multipled by the number of sessions is less than the number of profiles provided
-        if self.num_sessions * num_agents_per_session != len(self.agent_profiles):
+        # Check if number of subjects per session multipled by the number of sessions is less than the number of profiles provided
+        if self.num_sessions * num_subjects_per_session != len(
+            self.demographic_profiles
+        ):
             raise ValueError(
-                f"Total number of agents required for experiment ({self.num_sessions * num_agents_per_session}) does not match with the number of profiles provided in agent_profiles ({len(self.agent_profiles)})."
+                f"Total number of subjects required for experiment ({self.num_sessions * num_subjects_per_session}) does not match with the number of profiles provided in demographic_profiles ({len(self.demographic_profiles)})."
             )
 
-        return num_agents_per_session
+        return num_subjects_per_session
 
     def _check_num_sessions(self, num_sessions: int) -> int:
-        """Checks if the provided num_sessions is greater than 1.
+        """Checks if the provided num_sessions is greater than or equal to 1.
 
         Args:
             num_sessions (int): The num_sessions to be checked.
@@ -565,16 +579,16 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
     def _generate_session_id_list(self) -> List[Any]:
         """Generates a list of session IDs.
 
-        If either the treatment assignment strategy or the agent assignment strategy is set to 'manual',
-        the function returns a list of unique session IDs from the agent profiles DataFrame.
+        If the session assignment strategy is set to 'manual',
+        the function returns a list of unique session IDs from the demographic_profiles DataFrame.
         Otherwise, it returns a list of sequential integers starting from 0 up to the number of sessions - 1.
 
         Returns:
             List[Any]: A list of session IDs. If the assignment strategies are manual, the list contains unique session IDs
-                from the session_column in the agent_profiles DataFrame. Otherwise, it contains sequential integers starting from 0.
+                from the session_column in the demographic_profiles DataFrame. Otherwise, it contains sequential integers starting from 0.
         """
         if self.session_assignment_strategy == "manual":
-            return list(self.agent_profiles[self.session_column].unique())
+            return list(self.demographic_profiles[self.session_column].unique())
         else:
             return list(range(self.num_sessions))
 
@@ -603,18 +617,9 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
                 random_seed=random_seed,
             )
 
-        # elif self.treatment_assignment_strategy == "full_factorial":
-        #     treatment_labels = []
-        #     for _, inner_treatment_dict in self.treatments.items():
-        #         inner_treatment_labels = list(inner_treatment_dict.keys())
-        #         treatment_labels.append(inner_treatment_labels)
-        #     return full_factorial_assignment_session(
-        #         treatment_labels=treatment_labels, session_id_list=self.session_id_list, random_seed=random_seed
-        #     )
-
         elif self.treatment_assignment_strategy == "manual":
             return manual_assignment_session(
-                agent_profiles=self.agent_profiles,
+                demographic_profiles=self.demographic_profiles,
                 treatment_column=self.treatment_column,
                 session_column=self.session_column,
                 session_id_list=self.session_id_list,
@@ -636,118 +641,114 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
 
         if not treatment_label_set.issuperset(manual_defined_treatments):
             raise ValueError(
-                f"The treatment labels defined in the treatments worksheet ({list[treatment_label_set]}) is not a superset of the manually defined treatments in the agent_profiles worksheet ({list[manual_defined_treatments]})."
+                f"The treatment labels defined in the treatments worksheet ({list[treatment_label_set]}) is not a superset of the manually defined treatments in the demographic_profiles worksheet ({list[manual_defined_treatments]})."
             )
         else:
             pass
 
     def _assign_session(self, random_seed: int) -> dict[int, List[ProfileInfo]]:
-        """Assigns agent profiles to each session based on the given number of agents per session and agent assignment strategy.
-        However, if the session_assignment_strategy is 'manual', then assign the agents to their respective sessions based on the
-        assignment defined in agent_profiles.
+        """Assigns profiles to each session based on the given number of subjects per session and session assignment strategy.
+        However, if the session_assignment_strategy is 'manual', then assign the subjects to their respective sessions based on the
+        assignment defined in demographic_profiles.
 
         Args:
             random_seed (int): The random seed for reproducibility.
 
         Returns:
-            dict[int, List[ProfileInfo]]: A dictionary mapping session IDs to a list of agent profile information.
+            dict[int, List[ProfileInfo]]: A dictionary mapping session IDs to a list of profile information.
         """
         if self.session_assignment_strategy == "manual":
             session_assignment = {}
             for i, session_id in enumerate(self.session_id_list):
-                session_participants = self.agent_profiles[
-                    self.agent_profiles[self.session_column] == session_id
+                session_subjects = self.demographic_profiles[
+                    self.demographic_profiles[self.session_column] == session_id
                 ]
 
-                num_session_participants = len(session_participants)
-                if num_session_participants != self.num_agents_per_session:
+                num_session_subjects = len(session_subjects)
+                if num_session_subjects != self.num_subjects_per_session:
                     raise ValueError(
-                        f"Session {session_id} contains {num_session_participants} participants while the number of participants per session is supposed to be {self.num_agents_per_session}"
+                        f"Session {session_id} contains {num_session_subjects} subjects while the number of subjects per session is supposed to be {self.num_subjects_per_session}"
                     )
 
-                session_assignment[session_id] = session_participants.to_dict(
+                session_assignment[session_id] = session_subjects.to_dict(
                     orient="records"
                 )
 
         else:
-            randomised_agent_profiles = self.agent_profiles.sample(
+            randomised_demographic_profiles = self.demographic_profiles.sample(
                 frac=1, random_state=random_seed
             ).reset_index(drop=True)
 
             session_assignment = {}
             for i, session_id in enumerate(self.session_id_list):
-                session_assignment[session_id] = randomised_agent_profiles.iloc[
+                session_assignment[session_id] = randomised_demographic_profiles.iloc[
                     i
-                    * self.num_agents_per_session : (i + 1)
-                    * self.num_agents_per_session
+                    * self.num_subjects_per_session : (i + 1)
+                    * self.num_subjects_per_session
                 ].to_dict(orient="records")
 
         return session_assignment
 
     def _assign_role(self, random_seed: int) -> dict[int, str]:
-        """Assigns roles to agents based on the specified role assignment strategy.
+        """Assigns roles to subjects based on the specified role assignment strategy.
 
         Args:
             random_seed (int): The seed value for randomization when using the "random" role assignment strategy.
 
         Returns:
-            dict[int, str]: A dictionary mapping agent IDs to their assigned roles.
+            dict[int, str]: A dictionary mapping subject IDs to their assigned roles.
 
         Raises:
-            ValueError: If the number of defined roles does not match the number of agents
+            ValueError: If the number of defined roles does not match the number of subjects
                         assigned to a session when using the "random" role assignment strategy.
         """
         if self.role_assignment_strategy == "manual":
-            role_assignment = self.agent_profiles.set_index("ID")[
+            role_assignment = self.demographic_profiles.set_index("ID")[
                 self.role_column
             ].to_dict()
 
         else:
             random.seed(random_seed)
             role_assignment = {}
-            agent_role_labels = list(self.agent_roles.keys())
-            for session_id, session_participants in self.session_assignment.items():
-                num_participants = len(session_participants)
+            role_labels = list(self.roles.keys())
+            for session_id, session_subjects in self.session_assignment.items():
+                num_subjects = len(session_subjects)
 
-                if len(agent_role_labels) == num_participants:
-                    randomized_roles = random.sample(
-                        agent_role_labels, num_participants
-                    )
+                if len(role_labels) == num_subjects:
+                    randomized_roles = random.sample(role_labels, num_subjects)
 
                 else:
                     raise ValueError(
-                        f"Number of roles defined ({len(agent_role_labels)}) does not match the number of agents ({num_participants}) assigned to Session {session_id}."
+                        f"Number of roles defined ({len(role_labels)}) does not match the number of subjects ({num_subjects}) assigned to Session {session_id}."
                     )
 
                 role_assignment.update(
                     {
-                        participant["ID"]: role
-                        for participant, role in zip(
-                            session_participants, randomized_roles
-                        )
+                        subject["ID"]: role
+                        for subject, role in zip(session_subjects, randomized_roles)
                     }
                 )
 
         return role_assignment
 
     def _check_manually_assigned_roles(self) -> None:
-        """Validates that all manually assigned roles are defined in the agent roles.
+        """Validates that all manually assigned roles are defined in the roles worksheet.
 
         This method checks whether the roles manually assigned in the `role_assignment`
-        dictionary are a subset of the roles defined in the `agent_roles` dictionary.
-        If any manually assigned role is not present in the defined agent roles, a
+        dictionary are a subset of the roles defined in the `roles` dictionary.
+        If any manually assigned role is not present in the defined roles, a
         `ValueError` is raised.
 
         Raises:
-            ValueError: If the roles defined in the `agent_roles` worksheet are not a
-            superset of the manually defined roles in the `agent_profiles` worksheet.
+            ValueError: If the roles defined in the `roles` worksheet are not a
+            superset of the manually defined roles in the `demographic_profiles` worksheet.
         """
-        role_label_set = set(self.agent_roles.keys())
+        role_label_set = set(self.roles.keys())
         manual_defined_roles = set(self.role_assignment.values())
 
         if not role_label_set.issuperset(manual_defined_roles):
             raise ValueError(
-                f"The roles defined in the agent_roles worksheet ({list[role_label_set]}) is not a superset of the manually defined roles in the agent_profiles worksheet ({list[manual_defined_roles]})."
+                f"The roles defined in the roles worksheet ({list[role_label_set]}) is not a superset of the manually defined roles in the demographic_profiles worksheet ({list[manual_defined_roles]})."
             )
         else:
             pass
@@ -759,7 +760,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
         save_results_as_csv: bool = False,
     ) -> dict[str, Any]:
         """Runs an experiment based on the experimental settings defined during class initialisation.
-        If test_mode is set to True, only the first session will be selected and run; otherwise, sessions are run in parallel.
+        If test_mode is set to True, only a random session for each treatment arm will be selected and run sequentially; otherwise, sessions are run in parallel.
 
         Args:
             test_mode (bool, optional): Indicates whether the experiment is in test mode or not.
@@ -772,7 +773,7 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
         Returns:
             dict[str, Any]: A dictionary containing the experiment ID and session information.
         """
-        if test_mode:  # Run one session of each of the treatment groups
+        if test_mode:  # Run one session from each treatment group
             session_id_list = []
             for treatment in list(self.treatments.keys()):
                 matching_sessions = [
@@ -799,28 +800,26 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
             session_info["treatment"] = self.treatments[
                 self.treatment_assignment[session_id]
             ]
-            session_info["session_system_message"] = (
-                generate_conversational_session_system_message(
-                    experiment_context=self.experiment_context,
-                    treatment=session_info["treatment"],
-                )
+            session_info["treatment_label"] = self.treatment_assignment[session_id]
+            session_info["session_system_message"] = generate_session_system_message(
+                experiment_context=self.experiment_context
             )
             session_info["experiment_context"] = self.experiment_context
-            session_info["agent_profiles"] = self.session_assignment[session_id]
-            session_participant_ids = [
-                profile["ID"] for profile in session_info["agent_profiles"]
+            session_info["demographic_profiles"] = self.session_assignment[session_id]
+            session_subject_ids = [
+                profile["ID"] for profile in session_info["demographic_profiles"]
             ]
             session_info["roles"] = {
-                participant_id: assigned_role
-                for participant_id, assigned_role in self.role_assignment.items()
-                if participant_id in session_participant_ids
+                subject_id: assigned_role
+                for subject_id, assigned_role in self.role_assignment.items()
+                if subject_id in session_subject_ids
             }
-            session_info["agents"] = self._initialize_agents(session_info)
+            session_info["subjects"] = self._initialize_subjects(session_info)
             session_info = self._run_session(session_info, test_mode=test_mode)
-            updated_session_agent = {}
-            for agent_role, agent in session_info["agents"].items():
-                updated_session_agent[agent_role] = agent.to_dict()
-            session_info["agents"] = updated_session_agent
+            updated_session_subjects = {}
+            for subject_role, subject in session_info["subjects"].items():
+                updated_session_subjects[subject_role] = subject.to_dict()
+            session_info["subjects"] = updated_session_subjects
 
             return session_id, session_info
 
@@ -847,46 +846,47 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
 
         return experiment
 
-    def _initialize_agents(
+    def _initialize_subjects(
         self, session_info: dict[str, Any]
-    ) -> dict[str, ConversationalSyntheticAgent]:
-        """Initializes and returns a dictionary of ConversationalSyntheticAgent objects based on the provided session information.
+    ) -> dict[str, ConversationalSyntheticSubject]:
+        """Initializes and returns a dictionary of ConversationalSyntheticSubject objects based on the provided session information.
 
         Args:
-            session_info (dict[str, Any]): A dictionary containing session information, including agents' profile, role, session ID, treatment, etc.
+            session_info (dict[str, Any]): A dictionary containing session information, including subjects' profile, role, session ID, treatment, etc.
 
         Returns:
-            dict[str, ConversationalSyntheticAgent]: A dictionary where the key indicates the role and the value is an initialized ConversationalSyntheticAgent objects.
+            dict[str, ConversationalSyntheticSubject]: A dictionary where the key indicates the role and the value is an initialized ConversationalSyntheticSubject objects.
 
         Raises:
-            AssertionError: If the number of agent profiles does not match the number of agent roles when initializing agents.
+            AssertionError: If the number of demographic profiles does not match the number of roles when initializing subjects.
         """
-        assert len(session_info["agent_profiles"]) == len(
+        assert len(session_info["demographic_profiles"]) == len(
             session_info["roles"]
-        ), "Number of agent profiles does not match the number of agent roles when initialising agents."
-        agent_dict = {}
-        for i in range(len(session_info["agent_profiles"])):
-            agent_id = session_info["agent_profiles"][i]["ID"]
-            agent_role = session_info["roles"][agent_id]
-            agent_dict[agent_role] = ConversationalSyntheticAgent(
+        ), "Number of demographic profiles does not match the number of roles when initialising subjects."
+        subject_dict = {}
+        for i in range(len(session_info["demographic_profiles"])):
+            subject_id = session_info["demographic_profiles"][i]["ID"]
+            role = session_info["roles"][subject_id]
+            subject_dict[role] = ConversationalSyntheticSubject(
                 experiment_id=self.experiment_id,
                 experiment_context=self.experiment_context,
                 session_id=session_info["session_id"],
-                profile_info=session_info["agent_profiles"][i],
+                profile_info=session_info["demographic_profiles"][i],
                 model_info=self.model_info,
                 temperature=self.temperature,
-                api_endpoint=self.api_endpoint,
-                role=agent_role,
-                role_description=self.agent_roles[agent_role],
+                include_backstories=self.include_backstories,
+                hf_inference_endpoint=self.hf_inference_endpoint,
+                role=role,
+                role_description=self.roles[role],
                 treatment=session_info["treatment"],
             )
 
-        return agent_dict
+        return subject_dict
 
     def _run_session(
         self, session_info: dict[str, Any], test_mode: bool = False
     ) -> dict[str, Any]:
-        """Runs a session involving a conversation between multiple AI agents.
+        """Runs a session involving a conversation between multiple synthetic subjects.
 
         Args:
             session_info (dict[str, Any]): A dictionary containing session information.
@@ -895,60 +895,64 @@ class AItoAIConversationalExperiment(AIConversationalExperiment):
         Returns:
             dict[str, Any]: A dictionary containing the updated session information at the end of the session.
         """
-        message_history = []
+        session_message_history = []
+        subject_message_history = {}
         conversation_length = 0
-        num_agents = len(session_info["agents"])
-        agent_list = list(session_info["agents"].values())
+        num_subjects = len(session_info["subjects"])
+        subject_list = list(session_info["subjects"].values())
         response = session_info["session_system_message"]
-        agent_role = "system"
+        role = "system"
 
         while (
             "Thank you for the conversation" not in response
             and conversation_length < self.max_conversation_length
         ):
-            if agent_role == "system" and conversation_length == 0:
-                starting_message = [
-                    {
-                        agent_role: response,
-                        "task_id": conversation_length,
-                    },
-                    {
-                        "user": "Start",
-                    },
-                ]
-                message_history.extend(starting_message)
-            else:
+            if role == "system" and conversation_length == 0:
                 message_dict = {
-                    agent_role: response,
-                    "agent_id": agent.profile_info.get("ID", ""),
+                    role: response,
                     "task_id": conversation_length,
                 }
-                message_history.append(message_dict)
+                for subject in subject_list:
+                    subject_message_history[subject.role] = [message_dict]
+
+            else:
+                message_dict = {
+                    role: response,
+                    "subject_id": subject_id,
+                    "task_id": conversation_length,
+                }
+                for subject in subject_list:
+                    subject_message_history[subject.role].append(message_dict)
+
+            session_message_history.append(message_dict)
 
             if test_mode:
                 print(message_dict)
                 print()
 
-            # If no interview script is provided, the sequence of conversation will follow the sequence of agents defined in self._initialize_agents
-            agent = agent_list[conversation_length % num_agents]
-
-            response = agent.respond(message_history=message_history)
-            agent_role = agent.role
+            # If no interview script is provided, the sequence of conversation will follow the sequence of subjects defined in self._initialize_subjects
+            subject = subject_list[conversation_length % num_subjects]
+            subject_id = subject.profile_info.get("ID", "")
+            role = subject.role
+            response = subject.respond(
+                latest_message_history=subject_message_history[role]
+            )
+            subject_message_history[role] = []
             conversation_length += 1
 
         message_dict = {
-            agent_role: response,
-            "agent_id": agent.profile_info.get("ID", ""),
+            role: response,
+            "subject_id": subject_id,
             "task_id": conversation_length,
         }
-        message_history.append(message_dict)
-        message_history.append({"system": "End"})
+        session_message_history.append(message_dict)
+        session_message_history.append({"system": "End"})
         if test_mode:
             print(message_dict)
             print()
             print({"system": "End"})
 
-        session_info["message_history"] = message_history
+        session_info["message_history"] = session_message_history
         return session_info
 
     def _save_experiment(
@@ -971,29 +975,29 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
     """A class representing an AI-to-AI interview experiment. Inherits from the AItoAIConversationalExperiment class.
 
     This class extends the `AItoAIConversationalExperiment` class and provides additional functionality
-    specific to AI-to-AI interview experiments. More specifically, one of the agents in the session will serve
-    as the facilitator and will not be given a demographic profile.
+    specific to AI-to-AI interview experiments.
 
     Args:
-        model_info (str): The information about the AI model used in the experiment.
+        model_info (str): The information about the LLM used in the experiment.
         temperature (float): The temperature setting that will be applied to the LLM.
-        agent_profiles (pd.DataFrame): The profile information of the agents participating in the experiment.
-        agent_roles (dict[str, str]): Dictionary mapping agent roles to their descriptions.
-        num_agents_per_session (int, optional): Number of agents per session. Defaults to 2.
-        num_sessions (int, optional): Number of sessions. Defaults to 10.
+        demographic_profiles (pd.DataFrame): The profile information of the subjects participating in the experiment.
+        roles (dict[str, str]): Dictionary mapping of roles to their descriptions.
+        num_subjects_per_session (int, optional): Number of subjects per session. Defaults to 1.
+        num_sessions (int, optional): Number of sessions. Defaults to 1.
         experiment_context (str, optional): The context or purpose of the experiment. Defaults to an empty string.
         experiment_id (str, optional): The unique ID of the experiment. Defaults to an empty string.
-        api_endpoint (str, optional): The API endpoint for the HuggingFace model. Defaults to an empty string.
+        hf_inference_endpoint (str, optional): The API inference endpoint for the HuggingFace model. Defaults to an empty string.
         max_conversation_length (int, optional): The maximum length of a conversation. Defaults to 10.
         treatments (dict[str, Any], optional): The treatments for the experiment. Defaults to an empty dictionary.
-        treatment_assignment_strategy (str, optional): The strategy used for assigning treatments to agents. Defaults to "simple_random".
-        treatment_column (str, optional): The column in agent_profiles that contains the manually assigned treatments. Defaults to an empty string.
-        session_assignment_strategy (str, optional): The strategy used for assigning agents to sessions. Defaults to "random".
-        session_column (str, optional): The column in agent_profiles that contains the manually assigned sessions. Defaults to an empty string.
-        role_assignment_strategy (str, optional): The strategy used for assigning agents to sessions. Defaults to "random".
-        role_column (str, optional): The column in agent_profiles that contains the manually assigned role. Defaults to an empty string.
+        treatment_assignment_strategy (str, optional): The strategy used for assigning treatments to subjects. Defaults to "simple_random".
+        treatment_column (str, optional): The column in demographic_profiles that contains the manually assigned treatments. Defaults to an empty string.
+        session_assignment_strategy (str, optional): The strategy used for assigning subjects to sessions. Defaults to "random".
+        session_column (str, optional): The column in demographic_profiles that contains the manually assigned sessions. Defaults to an empty string.
+        role_assignment_strategy (str, optional): The strategy used for assigning subjects to sessions. Defaults to "random".
+        role_column (str, optional): The column in demographic_profiles that contains the manually assigned role. Defaults to an empty string.
         random_seed (int, optional): The random seed for reproducibility. Defaults to 42.
-        interview_prompts (List[dict[str, str]], optional): An optional dictionary containing the interview script that the facilitator agent has to follow.
+        include_backstories (bool, optional): Whether to include backstories in the subject profiles. Defaults to False.
+        interview_prompts (List[dict[str, str]], optional): An optional dictionary containing the interview script that the facilitator has to follow.
 
     Raises:
         ValueError: If the provided model_info is not supported.
@@ -1001,52 +1005,52 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
         ValueError: If the provided treatment_assignment_strategy is not supported.
         ValueError: If the provided session_assignment_strategy is not supported.
         ValueError: If the provided role_assignment_strategy is not supported.
-        ValueError: If the provided agent_profiles is an empty DataFrame or does not contain a 'ID' column.
+        ValueError: If the provided demographic_profiles is an empty DataFrame or does not contain a 'ID' column.
         ValueError: If the provided max_conversation_length is lesser than 5.
-        ValueError: If the provided treatment is not in the nested dictionary structure when treatment_assignment_strategy is 'full_factorial'.
         ValueError: If the provided num_sessions is not valid.
-        ValueError: If the provided num_agents_per_session is less than 2 or will exceed the total number of profile information.
-        ValueError: If the provided number of agent_roles is not equal to num_agents_per_session.
-        ValueError: If the number of roles defined does not match the number of agents assigned to each session.
+        ValueError: If the provided num_subjects_per_session is less than 1 or will exceed the total number of profile information provided.
+        ValueError: If the provided number of user-defined roles is not equal to num_subjects_per_session.
+        ValueError: If the number of user-defined roles does not match the number of subjects assigned to each session.
         ValueError: If the format of the interview_prompts does not fit with the expected format.
 
     Attributes:
-        model_info (str): The information about the AI model used in the experiment.
+        model_info (str): The information about the LLM used in the experiment.
         temperature (float): The temperature setting that will be applied to the LLM.
-        agent_profiles (pd.DataFrame): The profile information of the agents participating in the experiment.
-        agent_roles (dict[str, str]): The roles assigned to agents.
-        num_agents_per_session (int): The number of agents per session.
+        demographic_profiles (pd.DataFrame): The profile information of the subjects participating in the experiment.
+        roles (dict[str, str]): The roles assigned to subjects.
+        num_subjects_per_session (int): The number of subjects per session.
         num_sessions (int): The number of sessions in the experiment.
         experiment_context (str): The context or purpose of the experiment.
         experiment_id (str): The unique ID of the experiment.
-        api_endpoint (str, optional): The API endpoint for the HuggingFace model.
+        hf_inference_endpoint (str, optional): The API inference endpoint for the HuggingFace model.
         max_conversation_length (int): The maximum length of a conversation.
         treatments (dict[str, Any]): The treatments for the experiment.
-        treatment_assignment_strategy (str): The strategy used for assigning treatments to agents.
-        treatment_column (str, optional): The column in agent_profiles that contains the manually assigned treatments.
-        session_assignment_strategy (str, optional): The strategy used for assigning agents to sessions.
-        session_column (str, optional): The column in agent_profiles that contains the manually assigned sessions.
-        role_assignment_strategy (str, optional): The strategy used for assigning agents to sessions.
-        role_column (str, optional): The column in agent_profiles that contains the manually assigned sessions.
+        treatment_assignment_strategy (str): The strategy used for assigning treatments to subjects.
+        treatment_column (str, optional): The column in demographic_profiles that contains the manually assigned treatments.
+        session_assignment_strategy (str, optional): The strategy used for assigning subjects to sessions.
+        session_column (str, optional): The column in demographic_profiles that contains the manually assigned sessions.
+        role_assignment_strategy (str, optional): The strategy used for assigning subjects to sessions.
+        role_column (str, optional): The column in demographic_profiles that contains the manually assigned sessions.
         random_seed (int, optional): The random seed for reproducibility.
+        include_backstories (bool, optional): Whether to include backstories in the subject profiles.
         session_id_list (list): A list of session IDs generated based on the number of sessions.
         treatment_assignment (dict[Any, str]): A dictionary mapping session IDs to treatment labels.
-        session_assignment (dict[Any, list[ProfileInfo]]): A dictionary mapping session IDs to a list of agent profile information.
+        session_assignment (dict[Any, list[ProfileInfo]]): A dictionary mapping session IDs to a list of profile information.
         role_assignment (dict[Any, str]): A dictionary mapping user IDs to a specified role.
-        interview_prompts (List[dict[str, str]], optional): An optional dictionary containing the interview script that the facilitator agent has to follow.
+        interview_prompts (List[dict[str, str]], optional): An optional dictionary containing the interview script that the facilitator has to follow.
     """
 
     def __init__(
         self,
         model_info: str,
         temperature: float,
-        agent_profiles: pd.DataFrame,
-        agent_roles: dict[str, str],
-        num_agents_per_session: int = 2,
-        num_sessions: int = 10,
+        demographic_profiles: pd.DataFrame,
+        roles: dict[str, str],
+        num_subjects_per_session: int = 1,
+        num_sessions: int = 1,
         experiment_context: str = "",
         experiment_id: str = "",
-        api_endpoint: str = "",
+        hf_inference_endpoint: str = "",
         max_conversation_length: int = 10,
         treatments: dict[str, Any] = {},
         treatment_assignment_strategy: str = "simple_random",
@@ -1056,18 +1060,19 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
         role_assignment_strategy: str = "random",
         role_column: str = "",
         random_seed: int = 42,
+        include_backstories: bool = False,
         interview_prompts: List[dict[str, str]] = [],
     ):
         super().__init__(
             model_info,
             temperature,
-            agent_profiles,
-            agent_roles,
-            num_agents_per_session,
+            demographic_profiles,
+            roles,
+            num_subjects_per_session,
             num_sessions,
             experiment_context,
             experiment_id,
-            api_endpoint,
+            hf_inference_endpoint,
             max_conversation_length,
             treatments,
             treatment_assignment_strategy,
@@ -1077,11 +1082,12 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
             role_assignment_strategy,
             role_column,
             random_seed,
+            include_backstories,
         )
 
-        self.agent_roles = self._check_agent_roles(agent_roles=agent_roles)
-        self.num_agents_per_session = self._check_num_agents_per_session(
-            num_agents_per_session=num_agents_per_session
+        self.roles = self._check_roles(roles=roles)
+        self.num_subjects_per_session = self._check_num_subjects_per_session(
+            num_subjects_per_session=num_subjects_per_session
         )
         self.session_assignment = self._assign_session(random_seed=self.random_seed)
         self.role_assignment = self._assign_role(random_seed=self.random_seed)
@@ -1091,85 +1097,81 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
             interview_prompts=interview_prompts
         )
 
-    def _check_agent_roles(self, agent_roles: dict[str, str]) -> dict[str, str]:
-        """Checks if the provided agent_roles is valid.
+    def _check_roles(self, roles: dict[str, str]) -> dict[str, str]:
+        """Checks if the provided roles are valid.
 
         Args:
-            agent_roles (dict[str, str]): The agent_roles to be checked.
+            roles (dict[str, str]): The roles to be checked.
 
         Returns:
-            dict[str, str]: The validated agent_roles.
+            dict[str, str]: The validated roles.
 
         Raises:
-            ValueError: If the provided agent_roles is not valid.
+            ValueError: If the provided roles is not valid.
         """
-        if "Facilitator" not in list(agent_roles.keys()):
+        if "Facilitator" not in list(roles.keys()):
             raise ValueError(
-                "For an AI-to-AI interview-based experiment, one of the agent roles must be 'Facilitator'."
+                "For an AI-to-AI interview-based experiment, one of the roles must be 'Facilitator'."
             )
 
-        return agent_roles
+        return roles
 
-    def _check_num_agents_per_session(self, num_agents_per_session: int) -> int:
-        """Checks if the provided num_agents_per_session is 1 or more and matches with the number of agent profiles provided.
+    def _check_num_subjects_per_session(self, num_subjects_per_session: int) -> int:
+        """Checks if the provided num_subjects_per_session is 1 or more and matches with the number of demographic profiles provided.
 
         Args:
-            num_agents_per_session (int): The num_agents_per_session to be checked.
+            num_subjects_per_session (int): The num_subjects_per_session to be checked.
 
         Returns:
-            int: The validated num_agents_per_session.
+            int: The validated num_subjects_per_session.
 
         Raises:
-            ValueError: If the provided num_agents_per_session is not valid.
+            ValueError: If the provided num_subjects_per_session is not valid.
         """
-        # Ensure that number of agents per session is 1 or more
-        if num_agents_per_session < 1:
+        # Ensure that number of subjects per session is 1 or more
+        if num_subjects_per_session < 1:
             raise ValueError(
-                f"Invalid num_agents_per_session: {num_agents_per_session}. For AI-AI interview-based experiments, num_agents_per_session should be an integer that is equal to or greater than 1."
+                f"Invalid num_subjects_per_session: {num_subjects_per_session}. For AI-AI interview-based experiments, num_subjects_per_session should be an integer that is equal to or greater than 1."
             )
 
-        # Ensure that number of agents per session matches with the number of agent profiles provided
+        # Ensure that number of subjects per session matches with the number of demographic profiles provided
         user_defined_roles = [
-            role for role in list(self.agent_roles.keys()) if role not in SPECIAL_ROLES
+            role for role in list(self.roles.keys()) if role not in SPECIAL_ROLES
         ]
-        if len(user_defined_roles) != num_agents_per_session:
+        if len(user_defined_roles) != num_subjects_per_session:
             raise ValueError(
-                f"Number of user-defined roles ({len(user_defined_roles)}) does not match the number of agents assigned to each session ({num_agents_per_session})."
+                f"Number of user-defined roles ({len(user_defined_roles)}) does not match the number of subjects assigned to each session ({num_subjects_per_session})."
             )
 
-        # Ensure that number of agents per session multiplied by the number of sessions is less than the number of profiles provided
-        if self.num_sessions * len(user_defined_roles) != len(self.agent_profiles):
+        # Ensure that number of user-defined roles multiplied by the number of sessions is less than or equal to the number of profiles provided
+        if self.num_sessions * len(user_defined_roles) > len(self.demographic_profiles):
             raise ValueError(
-                f"Total number of user-defined agents required for experiment ({self.num_sessions * len(user_defined_roles)}) does not match with the number of profiles provided in agent_profiles ({len(self.agent_profiles)})."
+                f"Total number of subjects required for experiment ({self.num_sessions * len(user_defined_roles)}) larger than the number of profiles provided in demographic_profiles ({len(self.demographic_profiles)})."
             )
 
-        return num_agents_per_session
+        return num_subjects_per_session
 
     def _assign_session(self, random_seed: int) -> dict[int, List[ProfileInfo]]:
-        """Assigns agent profiles to each session based on the given number of agents per session (minus the special roles) and agent assignment strategy.
-        However, if the session_assignment_strategy is 'manual', then assign the agents to their respective sessions based on the
-        assignment defined in agent_profiles.
+        """Assigns demographic profiles to each session based on the given number of subjects per session (excluding the special roles) and session assignment strategy.
+        However, if the session_assignment_strategy is 'manual', then assign the subjects to their respective sessions based on the
+        assignment defined in demographic_profiles.
 
         Args:
             random_seed (int): The random seed for reproducibility.
 
         Returns:
-            dict[int, List[ProfileInfo]]: A dictionary mapping session IDs to a list of agent profile information.
+            dict[int, List[ProfileInfo]]: A dictionary mapping session IDs to a list of demographic profile information.
         """
         num_user_defined_roles = len(
-            [
-                role
-                for role in list(self.agent_roles.keys())
-                if role not in SPECIAL_ROLES
-            ]
+            [role for role in list(self.roles.keys()) if role not in SPECIAL_ROLES]
         )
 
         if self.session_assignment_strategy == "manual":
             session_assignment = {}
             for i, session_id in enumerate(self.session_id_list):
-                session_participants = self.agent_profiles[
-                    self.agent_profiles[self.session_column] == session_id
-                ]
+                session_participants = self.demographic_profiles[
+                    self.demographic_profiles[self.session_column] == session_id
+                ].reset_index(drop=True)
 
                 num_session_participants = len(session_participants)
                 if num_session_participants != num_user_defined_roles:
@@ -1182,92 +1184,84 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                 )
 
         else:
-            randomised_agent_profiles = self.agent_profiles.sample(
+            randomised_demographic_profiles = self.demographic_profiles.sample(
                 frac=1, random_state=random_seed
             ).reset_index(drop=True)
 
             session_assignment = {}
             for i, session_id in enumerate(self.session_id_list):
-                session_assignment[session_id] = randomised_agent_profiles.iloc[
+                session_assignment[session_id] = randomised_demographic_profiles.iloc[
                     i * num_user_defined_roles : (i + 1) * num_user_defined_roles
                 ].to_dict(orient="records")
 
         return session_assignment
 
     def _assign_role(self, random_seed: int) -> dict[int, str]:
-        """Assigns roles to agents based on the specified role assignment strategy.
+        """Assigns roles to subjects based on the specified role assignment strategy.
 
         Args:
             random_seed (int): The seed value for randomization when using the "random" role assignment strategy.
 
         Returns:
-            dict[int, str]: A dictionary mapping agent IDs to their assigned roles.
+            dict[int, str]: A dictionary mapping subject IDs to their assigned roles.
 
         Raises:
-            ValueError: If the number of defined roles does not match the number of agents
+            ValueError: If the number of defined roles does not match the number of subjects
                         assigned to a session when using the "random" role assignment strategy.
         """
         if self.role_assignment_strategy == "manual":
-            role_assignment = self.agent_profiles.set_index("ID")[
+            role_assignment = self.demographic_profiles.set_index("ID")[
                 self.role_column
             ].to_dict()
 
         else:
             random.seed(random_seed)
             role_assignment = {}
-            agent_role_labels = [
-                role
-                for role in list(self.agent_roles.keys())
-                if role not in SPECIAL_ROLES
+            user_defined_role_labels = [
+                role for role in list(self.roles.keys()) if role not in SPECIAL_ROLES
             ]
-            for session_id, session_participants in self.session_assignment.items():
-                num_participants = len(session_participants)
+            for session_id, session_subjects in self.session_assignment.items():
+                num_subjects = len(session_subjects)
 
-                if len(agent_role_labels) == num_participants:
+                if len(user_defined_role_labels) == num_subjects:
                     randomized_roles = random.sample(
-                        agent_role_labels, num_participants
+                        user_defined_role_labels, num_subjects
                     )
 
                 else:
                     raise ValueError(
-                        f"Number of user-defined roles ({len(agent_role_labels)}) does not match the number of agents ({num_participants}) assigned to Session {session_id}."
+                        f"Number of user-defined roles ({len(user_defined_role_labels)}) does not match the number of subjects ({num_subjects}) assigned to Session {session_id}."
                     )
 
                 role_assignment.update(
                     {
                         participant["ID"]: role
-                        for participant, role in zip(
-                            session_participants, randomized_roles
-                        )
+                        for participant, role in zip(session_subjects, randomized_roles)
                     }
                 )
 
         return role_assignment
 
     def _check_manually_assigned_roles(self) -> None:
-        """Validates that all manually assigned roles are defined in the agent roles, excluding special roles like "Facilitator" and "Summarizer".
+        """Validates that all manually assigned roles are defined in roles, excluding special roles like "Facilitator" and "Summarizer".
 
         This method checks whether the roles manually assigned in the `role_assignment`
-        dictionary are a subset of the roles defined in the `agent_roles` dictionary.
-        If any manually assigned role is not present in the defined agent roles, a
+        dictionary are a subset of the roles defined in the `roles` dictionary.
+        If any manually assigned role is not present in the defined roles, a
         `ValueError` is raised.
 
         Raises:
-            ValueError: If the roles defined in the `agent_roles` worksheet are not a
-            superset of the manually defined roles in the `agent_profiles` worksheet.
+            ValueError: If the roles defined in the `roles` worksheet are not a
+            superset of the manually defined roles in the `demographic_profiles` worksheet.
         """
         role_label_set = set(
-            [
-                role
-                for role in list(self.agent_roles.keys())
-                if role not in SPECIAL_ROLES
-            ]
+            [role for role in list(self.roles.keys()) if role not in SPECIAL_ROLES]
         )
         manual_defined_roles = set(self.role_assignment.values())
 
         if not role_label_set.issuperset(manual_defined_roles):
             raise ValueError(
-                f"The user-defined roles in the agent_roles worksheet ({list[role_label_set]}) is not a superset of the manually defined roles in the agent_profiles worksheet ({list[manual_defined_roles]})."
+                f"The user-defined roles in the roles worksheet ({list[role_label_set]}) is not a superset of the manually defined roles in the demographic_profiles worksheet ({list[manual_defined_roles]})."
             )
         else:
             pass
@@ -1291,10 +1285,10 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                   (calculated as `len(interview_prompts) * total number of special and user-defined roles).
                 - Each prompt's "type" field contains only approved prompt types (defined in `SUPPORTED_PROMPT_TYPES`).
                 - Each prompt's "var_name" field contains unique variable names.
-                - The "randomize_response_order" field contains only approved values (0 or 1).
-                - The "validate_response" field contains only approved values (0 or 1).
-                - The "generate_speculation_score" field contains only approved values (0 or 1).
-                - The "format_response" field contains only approved values (0 or 1).
+                - The "randomize_response_order" field contains only approved values True or False).
+                - The "validate_response" field contains only approved values (True or False).
+                - The "generate_speculation_score" field contains only approved values (True or False).
+                - The "format_response" field contains only approved values (True or False).
         """
         # Check if interview_prompts is not an empty list
         if not interview_prompts:
@@ -1310,12 +1304,9 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
             )
 
         # Check if the length of the interview would exceed the maximum conversation length
-        if (
-            len(interview_prompts) * len(self.agent_roles)
-            > self.max_conversation_length
-        ):
+        if len(interview_prompts) * len(self.roles) > self.max_conversation_length:
             raise ValueError(
-                f"Based on the length of the interview script ({len(interview_prompts)}) and total number of special and user-defined agents ({len(self.agent_roles)}), the maximum length of the conversation should be larger or equal to {len(interview_prompts) * len(self.agent_roles)} and not {self.max_conversation_length}."
+                f"Based on the length of the interview script ({len(interview_prompts)}) and total number of special and user-defined roles ({len(self.roles)}), the maximum length of the conversation should be larger or equal to {len(interview_prompts) * len(self.roles)}, rather than {self.max_conversation_length}."
             )
 
         unique_var_names = []
@@ -1334,37 +1325,29 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
             else:
                 unique_var_names.append(prompt_dict["var_name"])
 
-            # Check if the randomize_response_order column contains only approved values (0 or 1)
-            if str(prompt_dict["randomize_response_order"]) not in ["0", "1"]:
+            # Check if the randomize_response_order column contains only approved values (True or False)
+            if prompt_dict["randomize_response_order"] not in [True, False]:
                 raise ValueError(
-                    f"Task ID {prompt_dict['task_id']} contains an invalid value in randomize_response_order field: {prompt_dict['randomize_response_order']}. Supported options include: 0 or 1."
+                    f"Task ID {prompt_dict['task_id']} contains an invalid value in randomize_response_order field: {prompt_dict['randomize_response_order']}. Supported options include: True or False."
                 )
-            prompt_dict["randomize_response_order"] = str(
-                prompt_dict["randomize_response_order"]
-            )
 
-            # Check if the validate_response column contains only approved values (0 or 1)
-            if str(prompt_dict["validate_response"]) not in ["0", "1"]:
+            # Check if the validate_response column contains only approved values (True or False)
+            if prompt_dict["validate_response"] not in [True, False]:
                 raise ValueError(
-                    f"Task ID {prompt_dict['task_id']} contains an invalid value in validate_response field: {prompt_dict['validate_response']}. Supported options include: 0 or 1."
+                    f"Task ID {prompt_dict['task_id']} contains an invalid value in validate_response field: {prompt_dict['validate_response']}. Supported options include: True or False."
                 )
-            prompt_dict["validate_response"] = str(prompt_dict["validate_response"])
 
-            # Check if the generate_speculation_score column contains only approved values (0 or 1)
-            if str(prompt_dict["generate_speculation_score"]) not in ["0", "1"]:
+            # Check if the generate_speculation_score column contains only approved values (True or False)
+            if prompt_dict["generate_speculation_score"] not in [True, False]:
                 raise ValueError(
-                    f"Task ID {prompt_dict['task_id']} contains an invalid value in generate_speculation_score field: {prompt_dict['generate_speculation_score']}. Supported options include: 0 or 1."
+                    f"Task ID {prompt_dict['task_id']} contains an invalid value in generate_speculation_score field: {prompt_dict['generate_speculation_score']}. Supported options include: True or False."
                 )
-            prompt_dict["generate_speculation_score"] = str(
-                prompt_dict["generate_speculation_score"]
-            )
 
-            # Check if the format_response column contains only approved values (0 or 1)
-            if str(prompt_dict["format_response"]) not in ["0", "1"]:
+            # Check if the format_response column contains only approved values (True or False)
+            if prompt_dict["format_response"] not in [True, False]:
                 raise ValueError(
-                    f"Task ID {prompt_dict['task_id']} contains an invalid value in format_response field: {prompt_dict['format_response']}. Supported options include: 0 or 1."
+                    f"Task ID {prompt_dict['task_id']} contains an invalid value in format_response field: {prompt_dict['format_response']}. Supported options include: True or False."
                 )
-            prompt_dict["format_response"] = str(prompt_dict["format_response"])
 
         return interview_prompts
 
@@ -1375,7 +1358,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
         save_results_as_csv: bool = False,
     ) -> dict[str, Any]:
         """Runs an experiment based on the experimental settings defined during class initialisation.
-        If test_mode is set to True, only the first session will be selected and run; otherwise, sessions are run in parallel.
+        If test_mode is set to True, a random session from each treatment arm will be selected and run; otherwise, sessions are run in parallel.
 
         Args:
             test_mode (bool, optional): Indicates whether the experiment is in test mode or not.
@@ -1419,32 +1402,30 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
             session_info["treatment"] = self.treatments[
                 self.treatment_assignment[session_id]
             ]
-            session_info["session_system_message"] = (
-                generate_conversational_session_system_message(
-                    experiment_context=self.experiment_context,
-                    treatment=session_info["treatment"],
-                )
+            session_info["treatment_label"] = self.treatment_assignment[session_id]
+            session_info["session_system_message"] = generate_session_system_message(
+                experiment_context=self.experiment_context,
             )
             session_info["experiment_context"] = self.experiment_context
-            session_info["agent_profiles"] = self.session_assignment[session_id]
-            session_participant_ids = [
-                profile["ID"] for profile in session_info["agent_profiles"]
+            session_info["demographic_profiles"] = self.session_assignment[session_id]
+            session_subject_ids = [
+                profile["ID"] for profile in session_info["demographic_profiles"]
             ]
             session_info["roles"] = {
-                participant_id: assigned_role
-                for participant_id, assigned_role in self.role_assignment.items()
-                if participant_id in session_participant_ids
+                subject_id: assigned_role
+                for subject_id, assigned_role in self.role_assignment.items()
+                if subject_id in session_subject_ids
             }
-            session_info["agents"] = self._initialize_agents(session_info)
+            session_info["subjects"] = self._initialize_subjects(session_info)
             session_info = self._run_session(
                 session_info=session_info,
                 interview_prompts=self.interview_prompts,
                 test_mode=test_mode,
             )
-            updated_session_agent = {}
-            for agent_role, agent in session_info["agents"].items():
-                updated_session_agent[agent_role] = agent.to_dict()
-            session_info["agents"] = updated_session_agent
+            updated_session_subjects = {}
+            for role, subject in session_info["subjects"].items():
+                updated_session_subjects[role] = subject.to_dict()
+            session_info["subjects"] = updated_session_subjects
 
             return session_id, session_info
 
@@ -1471,76 +1452,79 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
 
         return experiment
 
-    def _initialize_agents(
+    def _initialize_subjects(
         self, session_info: dict[str, Any]
-    ) -> dict[str, ConversationalSyntheticAgent]:
-        """Initializes and returns a dictionary of ConversationalSyntheticAgent objects for both special and user-defined agent roles based on the provided session information.
+    ) -> dict[str, ConversationalSyntheticSubject]:
+        """Initializes and returns a dictionary of ConversationalSyntheticSubject objects for both special and user-defined roles based on the provided session information.
 
         Args:
-            session_info (dict[str, Any]): A dictionary containing session information, including agent profiles, role, session ID, treatment, etc.
+            session_info (dict[str, Any]): A dictionary containing session information, including demographic profiles, roles, session ID, treatment, etc.
 
         Returns:
-            dict[str, ConversationalSyntheticAgent]: A dictionary where the key indicates the role and the value is an initialized ConversationalSyntheticAgent objects.
+            dict[str, ConversationalSyntheticSubject]: A dictionary where the key indicates the role and the value is an initialized ConversationalSyntheticSubject objects.
 
         Raises:
-            AssertionError: If the number of agent profiles does not match the number of agent roles (minus special roles) when initializing agents.
+            AssertionError: If the number of demographic profiles does not match the number of user-defined roles when initializing subjects.
         """
-        agent_dict = {}
+        subject_dict = {}
 
-        # First, initialise Facilitator agent
-        agent_dict["Facilitator"] = ConversationalSyntheticAgent(
+        # First, initialise Facilitator
+        subject_dict["Facilitator"] = ConversationalSyntheticSubject(
             experiment_id=self.experiment_id,
             experiment_context=self.experiment_context,
             session_id=session_info["session_id"],
             profile_info={},
             model_info=self.model_info,
             temperature=self.temperature,
-            api_endpoint=self.api_endpoint,
+            hf_inference_endpoint=self.hf_inference_endpoint,
             role="Facilitator",
-            role_description=self.agent_roles["Facilitator"],
-            treatment=session_info["treatment"],
+            role_description=self.roles["Facilitator"],
+            treatment="",
+            include_backstories=False,
         )
 
-        # Then, initialise user-defined agents based on sequence defined in agent_profiles
+        # Initialise user-defined subjects based on sequence defined in roles
         user_defined_roles = [
-            role for role in list(self.agent_roles.keys()) if role not in SPECIAL_ROLES
+            role for role in list(self.roles.keys()) if role not in SPECIAL_ROLES
         ]
-        assert len(session_info["agent_profiles"]) == len(
+        assert len(session_info["demographic_profiles"]) == len(
             user_defined_roles
-        ), f"Number of agents' profiles ({len(session_info['agent_profiles'])}) does not match the number of user-defined roles ({len(user_defined_roles)}) when initialising agents. The number of agent profiles should be equal the number of user-defined roles (excluding special roles like Facilitator and Summarizer)."
+        ), f"Number of demographic profiles ({len(session_info['demographic_profiles'])}) does not match the number of user-defined roles ({len(user_defined_roles)}) when initialising subjects. The number of demographic profiles should be equal the number of user-defined roles (excluding special roles like Facilitator and Summarizer)."
 
-        for i in range(len(session_info["agent_profiles"])):
-            agent_id = session_info["agent_profiles"][i]["ID"]
-            agent_role = session_info["roles"][agent_id]
-            agent_dict[agent_role] = ConversationalSyntheticAgent(
+        for i in range(len(session_info["demographic_profiles"])):
+            subject_id = session_info["demographic_profiles"][i]["ID"]
+            role = session_info["roles"][subject_id]
+            subject_dict[role] = ConversationalSyntheticSubject(
                 experiment_id=self.experiment_id,
                 experiment_context=self.experiment_context,
                 session_id=session_info["session_id"],
-                profile_info=session_info["agent_profiles"][i],
+                profile_info=session_info["demographic_profiles"][i],
                 model_info=self.model_info,
                 temperature=self.temperature,
-                api_endpoint=self.api_endpoint,
-                role=agent_role,
-                role_description=self.agent_roles[agent_role],
+                hf_inference_endpoint=self.hf_inference_endpoint,
+                role=role,
+                role_description=self.roles[role],
                 treatment=session_info["treatment"],
+                include_backstories=self.include_backstories,
             )
 
-        # Define Summarizer agent last if it is required
-        if "Summarizer" in list(self.agent_roles.keys()):
-            agent_dict["Summarizer"] = ConversationalSyntheticAgent(
+        # Define Summarizer last if it is required
+        if "Summarizer" in list(self.roles.keys()):
+            subject_dict["Summarizer"] = ConversationalSyntheticSubject(
                 experiment_id=self.experiment_id,
                 experiment_context=self.experiment_context,
                 session_id=session_info["session_id"],
                 profile_info={},
                 model_info=self.model_info,
                 temperature=self.temperature,
-                api_endpoint=self.api_endpoint,
+                hf_inference_endpoint=self.hf_inference_endpoint,
                 role="Summarizer",
-                role_description=self.agent_roles["Summarizer"],
-                treatment=session_info["treatment"],
+                role_description=self.roles["Summarizer"],
+                treatment="",
+                include_backstories=False,
             )
 
-        return agent_dict
+        return subject_dict
 
     def _sort_tasks(self, prompts: list[dict]) -> list[dict]:
         """Sorts and shuffles a list of prompts based on their "task_order" value.
@@ -1573,14 +1557,14 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
         return sorted_prompts
 
     def _format_response_options(
-        self, response_options: Any, randomize_response_order: int = False
+        self, response_options: Any, randomize_response_order: bool = False
     ) -> str:
         """Formats the given response options into a human-readable string.
 
         Args:
             response_options (Any): The response options to format. This can be a range,
                                     a list, or any other type.
-            randomize_response_order (int, optional): Indicates whether the response options should be randomized.
+            randomize_response_order (bool, optional): Indicates whether the response options should be randomized.
                 Defaults to False.
 
         Returns:
@@ -1619,21 +1603,27 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
         interview_prompts: List[dict[str, str]],
         test_mode: bool = False,
     ) -> dict[str, Any]:
-        """Runs a session involving a conversation between multiple AI agents.
+        """Runs a session involving an interview between multiple synthetic subjects.
 
         Args:
             session_info (dict[str, Any]): A dictionary containing session information.
-            interview_prompts (List[dict[str, str]]): An list containing the interview script that the facilitator agent has to follow.
-            test_mode (bool, optional): A boolean indicating if the session is executed under test mode. In test mode, only the first session is executed and all responses are printed out for easy reference.
+            interview_prompts (List[dict[str, str]]): An list containing the interview script that the facilitator has to follow.
+            test_mode (bool, optional): A boolean indicating if the session is executed under test mode. In test mode, only a randomly seleced session from each treatment arm is executed and all responses are printed out for easy reference.
 
         Returns:
             dict[str, Any]: A dictionary containing the updated session information at the end of the session.
         """
-        message_history = []
+        session_message_history = []
+        subject_message_history = {}
         response = session_info["session_system_message"]
-        agent_role = "system"
-        message_dict = {agent_role: response}
-        message_history.append(message_dict)
+        role = "system"
+        message_dict = {role: response}
+
+        subject_list = list(session_info["subjects"].values())
+        for subject in subject_list:
+            subject_message_history[subject.role] = [message_dict]
+        session_message_history.append(message_dict)
+
         if test_mode:
             print(message_dict)
             print()
@@ -1669,42 +1659,57 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                     "task_id": round.get("task_id", None),
                     "var_name": round.get("var_name", None),
                 }
-                message_history.append(message_dict)
+
+                for subject in subject_list:
+                    if subject.role == "Facilitator":
+                        continue
+                    subject_message_history[subject.role].append(message_dict)
+                session_message_history.append(message_dict)
+
                 if test_mode:
                     print(message_dict)
                     print()
 
-                # Loop through each agent back-to-back and get their response
-                for agent_role, agent in session_info["agents"].items():
-                    response = agent.respond(
-                        message_history=message_history,
+                if (
+                    round["type"] == "context"
+                ):  # Context setting only, no response required from subjects
+                    continue
+
+                # Loop through each subject back-to-back and get their response during a discussion round
+                for role, subject in session_info["subjects"].items():
+                    if role == "Facilitator":
+                        continue
+                    response = subject.respond(
+                        latest_message_history=subject_message_history[role],
                         generate_speculation_score=round["generate_speculation_score"],
                         format_response=round["format_response"],
                     )
+                    subject_message_history[role] = []
 
                     message_dict = {
-                        agent_role: response,
-                        "agent_id": agent.profile_info.get("ID", ""),
+                        role: response,
+                        "subject_id": subject.profile_info.get("ID", ""),
                         "task_id": round.get("task_id", None),
                         "var_name": round.get("var_name", None),
                     }
-                    message_history.append(message_dict)
+                    for subject in subject_list:
+                        subject_message_history[subject.role].append(message_dict)
+                    session_message_history.append(message_dict)
+
                     if test_mode:
                         print(message_dict)
                         print()
 
             elif round["type"] == "public_question":
                 # Facilitator is posing the same question to each subject and the subjects' responses are shown to all subjects during the round.
-                for agent_role, question in round["llm_text"].items():
+                for role, question in round["llm_text"].items():
                     # Format interview question
                     if "{response_options}" in question:
                         try:
                             question = question.replace(
                                 "{response_options}",
                                 self._format_response_options(
-                                    response_options=round["response_options"][
-                                        agent_role
-                                    ],
+                                    response_options=round["response_options"][role],
                                     randomize_response_order=round[
                                         "randomize_response_order"
                                     ],
@@ -1712,7 +1717,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                             )
                         except KeyError:
                             raise ValueError(
-                                f"KeyError: The role '{agent_role}' was not found in the response_options dictionary for task ID {round.get('task_id', None)}."
+                                f"KeyError: The role '{role}' was not found in the response_options dictionary for task ID {round.get('task_id', None)}."
                             )
 
                     message_dict = {
@@ -1720,44 +1725,48 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                         "task_id": round.get("task_id", None),
                         "var_name": round.get("var_name", None),
                     }
-                    message_history.append(message_dict)
+                    for subject in subject_list:
+                        subject_message_history[subject.role].append(message_dict)
+                    session_message_history.append(message_dict)
+
                     if test_mode:
                         print(message_dict)
                         print()
 
-                    agent = session_info["agents"][agent_role]
-                    response = agent.respond(
-                        message_history=message_history,
+                    subject = session_info["subjects"][role]
+                    response = subject.respond(
+                        latest_message_history=subject_message_history[role],
                         validate_response=round["validate_response"],
-                        response_options=round["response_options"].get(agent_role, []),
+                        response_options=round["response_options"].get(role, []),
                         generate_speculation_score=round["generate_speculation_score"],
                         format_response=round["format_response"],
                     )
+                    subject_message_history[role] = []
 
                     message_dict = {
-                        agent_role: response,
-                        "agent_id": agent.profile_info.get("ID", ""),
+                        role: response,
+                        "subject_id": subject.profile_info.get("ID", ""),
                         "task_id": round.get("task_id", None),
                         "var_name": round.get("var_name", None),
                     }
-                    message_history.append(message_dict)
+                    for subject in subject_list:
+                        subject_message_history[subject.role].append(message_dict)
+                    session_message_history.append(message_dict)
+
                     if test_mode:
                         print(message_dict)
                         print()
 
             elif round["type"] == "private_question":
                 # Facilitator is posing the same question to each subject but the subjects' responses are not shown to other subjects during the round
-                round_message_history = []
-                for agent_role, question in round["llm_text"].items():
+                for role, question in round["llm_text"].items():
                     # Format interview question
                     if "{response_options}" in question:
                         try:
                             question = question.replace(
                                 "{response_options}",
                                 self._format_response_options(
-                                    response_options=round["response_options"][
-                                        agent_role
-                                    ],
+                                    response_options=round["response_options"][role],
                                     randomize_response_order=round[
                                         "randomize_response_order"
                                     ],
@@ -1765,7 +1774,7 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                             )
                         except KeyError:
                             raise ValueError(
-                                f"KeyError: The role '{agent_role}' was not found in the response_options dictionary for task ID {round.get('task_id', None)}."
+                                f"KeyError: The role '{role}' was not found in the response_options dictionary for task ID {round.get('task_id', None)}."
                             )
 
                     message_dict = {
@@ -1773,41 +1782,43 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                         "task_id": round.get("task_id", None),
                         "var_name": round.get("var_name", None),
                     }
-                    round_message_history.append(message_dict)
+                    subject_message_history[role].append(message_dict)
+                    session_message_history.append(message_dict)
+
                     if test_mode:
                         print(message_dict)
                         print()
 
-                    agent = session_info["agents"][agent_role]
-                    response = agent.respond(
-                        message_history=message_history + [message_dict],
+                    subject = session_info["subjects"][role]
+                    response = subject.respond(
+                        latest_message_history=subject_message_history[role],
                         validate_response=round["validate_response"],
-                        response_options=round["response_options"].get(agent_role, []),
+                        response_options=round["response_options"].get(role, []),
                         generate_speculation_score=round["generate_speculation_score"],
                         format_response=round["format_response"],
                     )
+                    subject_message_history[role] = []
 
                     message_dict = {
-                        agent_role: response,
-                        "agent_id": agent.profile_info.get("ID", ""),
+                        role: response,
+                        "subject_id": subject.profile_info.get("ID", ""),
                         "task_id": round.get("task_id", None),
                         "var_name": round.get("var_name", None),
                     }
-                    round_message_history.append(message_dict)
+                    subject_message_history[role].append(message_dict)
+                    session_message_history.append(message_dict)
                     if test_mode:
                         print(message_dict)
                         print()
-
-                message_history.extend(round_message_history)
 
             else:
                 raise ValueError(
                     f"Invalid prompt type: {round['type']}. The type of prompt for each interview round should one of these options: {SUPPORTED_PROMPT_TYPES}"
                 )
 
-        message_history.append({"system": "End"})
+        session_message_history.append({"system": "End"})
         if test_mode:
             print({"system": "End"})
 
-        session_info["message_history"] = message_history
+        session_info["message_history"] = session_message_history
         return session_info

@@ -1,9 +1,6 @@
-import pytest
-from unittest.mock import Mock, patch
-from talkingtomachines.generative.synthetic_agent import (
-    SyntheticAgent,
-    DemographicInfo,
-    ConversationalSyntheticAgent,
+from talkingtomachines.generative.synthetic_subject import (
+    SyntheticSubject,
+    ConversationalSyntheticSubject,
 )
 
 
@@ -12,7 +9,7 @@ def test_synthetic_agent():
     demographic_info = {"age": 30, "gender": "male", "occupation": "engineer"}
 
     # Create a synthetic agent instance
-    agent = SyntheticAgent(
+    agent = SyntheticSubject(
         experiment_id="123",
         experiment_context="context",
         session_id=1,
@@ -51,7 +48,7 @@ def test_conversational_synthetic_agent():
     demographic_info = {"age": 30, "gender": "male", "occupation": "engineer"}
 
     # Create a conversational synthetic agent instance
-    agent = ConversationalSyntheticAgent(
+    agent = ConversationalSyntheticSubject(
         experiment_id="123",
         experiment_context="context",
         session_id=1,

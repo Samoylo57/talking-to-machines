@@ -68,9 +68,9 @@ def validate_experimental_settings_sheet(experimental_settings: pd.DataFrame) ->
     valid_settings = [
         "experiment_id",
         "model_info",
-        "api_endpoint",
+        "hf_inference_endpoint",
         "temperature",
-        "num_agents_per_session",
+        "num_subjects_per_session",
         "num_sessions",
         "max_conversation_length",
         "treatment_assignment_strategy",
@@ -80,6 +80,7 @@ def validate_experimental_settings_sheet(experimental_settings: pd.DataFrame) ->
         "role_assignment_strategy",
         "role_column",
         "random_seed",
+        "include_backstories",
     ]
     for setting in valid_settings:
         assert (
@@ -106,14 +107,14 @@ def validate_treatments_sheet(treatments: pd.DataFrame) -> None:
     ), f"Invalid columns in treatments sheet. Expected {expected_columns}, got {list(treatments.columns)}"
 
 
-def validate_agent_roles_sheet(agent_roles: pd.DataFrame) -> None:
-    """Validates the structure of the agent_roles worksheet.
+def validate_roles_sheet(roles: pd.DataFrame) -> None:
+    """Validates the structure of the roles worksheet.
 
     This function checks if the provided DataFrame has the expected column headers.
     It raises an assertion error if the columns do not match the expected structure.
 
     Args:
-        agent_roles (pd.DataFrame): The DataFrame containing agent roles to be validated.
+        roles (pd.DataFrame): The DataFrame containing roles to be validated.
 
     Raises:
         AssertionError: If the columns of the DataFrame do not match the expected columns.
@@ -121,8 +122,8 @@ def validate_agent_roles_sheet(agent_roles: pd.DataFrame) -> None:
     # Validate the column headers
     expected_columns = ["role_label", "role_description"]
     assert (
-        list(agent_roles.columns) == expected_columns
-    ), f"Invalid columns in agent_roles sheet. Expected {expected_columns}, got {list(agent_roles.columns)}"
+        list(roles.columns) == expected_columns
+    ), f"Invalid columns in roles sheet. Expected {expected_columns}, got {list(roles.columns)}"
 
 
 def validate_prompts_sheet(prompts: pd.DataFrame) -> None:
