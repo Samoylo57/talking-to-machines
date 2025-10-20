@@ -84,6 +84,16 @@ export HF_API_KEY=hf_...
 
 ---
 
+## Video Walkthrough
+A video walkthrough of how to set up the Talking To Machines platform for both macOS and Windows devices can be found here:
+
+macOS: [Video Walkthrough](https://www.loom.com/share/a2c15f1258d5436eaeca197998286cd9?sid=7958bdbe-2f34-4d5f-8d47-49fd49cb315c)
+
+Windows: [Video Walkthrough](https://www.loom.com/share/79969b38be6d4c2387d19ecc3e54ae4d?sid=d372a5e7-6dd5-4923-b838-69eba7dce20a)
+
+
+---
+
 ## 🚀 Usage
 
 ### CLI Tool
