@@ -17,24 +17,46 @@ The **talkingtomachines** platform is developed to facilitate the design, conduc
 ## 🔧 Installation
 
 
-### 1. Install Python 3.10 or newer
+### 1. Install Miniconda
 
-* Visit the official Python downloads page:
-https://www.python.org/downloads/
+* Download **Miniconda** for your OS (Windows, macOS):
+  [/docs/getting-started/miniconda/install#verify-your-install](/docs/getting-started/miniconda/install#verify-your-install)
+* Run the installer and accept the defaults.
 
-* Choose the installer that matches your operating system (Windows, macOS, or Linux).
-* Download and run the installer, accepting the default options.  For Windows users, be sure to tick “Add Python to PATH”.
-* Verify the install on your terminal:
+  * On Windows, allow the installer to add Conda to your PATH.
+  * On macOS, you may need to restart your terminal after installation.
+
+Verify your installation by running the following command in your terminal (for macOS) or Windows Powershell (for Winfows):
+
 ```bash
-python --version   # should print 3.10.x or higher
+conda --version  # Displays conda's version number
 ```
 
-### 2. Create and activate a virtual environment
+
+### 2. Create and activate a Conda environment
+
+Create a fresh environment (Python 3.10 or newer):
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install --upgrade pip
+conda create -n your-env-name python=3.10
+```
+
+Activate your newly created conda environment:
+
+```bash
+conda activate your-env-name
+```
+
+Upgrade `pip` inside the environment (optional but recommended):
+
+```bash
+python -m pip install --upgrade pip
+```
+
+Verify that `python` and `pip` are properly installed:
+```bash
+python --version   # should print 3.10.x or higher
+pip --version
 ```
 
 ### 3. Install the talkingtomachines package
@@ -47,7 +69,7 @@ pip install \
 
 ### 4. Provide API keys for OpenAI and HuggingFace
 
-Approach 1: Create a `.env` file in your root directory
+Approach 1: Create a `.env` file in your project directory
 ```ini
 # .env file
 OPENAI_API_KEY=sk-...

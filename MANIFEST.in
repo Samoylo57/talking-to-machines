@@ -6,7 +6,7 @@ exclude build/*
 exclude *.egg-info/*
 exclude __MACOSX/*
 exclude *.DS_Store
-exlcude .env
+exclude .env
 prune storage
 prune demos
 prune experiment_results
