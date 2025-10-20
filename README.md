@@ -20,7 +20,7 @@ The **talkingtomachines** platform is developed to facilitate the design, conduc
 ### 1. Install Miniconda
 
 * Download **Miniconda** for your OS (Windows, macOS):
-  [/docs/getting-started/miniconda/install#verify-your-install](/docs/getting-started/miniconda/install#verify-your-install)
+  [https://www.anaconda.com/docs/getting-started/miniconda/install](https://www.anaconda.com/docs/getting-started/miniconda/install)
 * Run the installer and accept the defaults.
 
   * On Windows, allow the installer to add Conda to your PATH.
