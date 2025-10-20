@@ -6,11 +6,11 @@ build-backend = "setuptools.build_meta"
 # ─── Project metadata ─────────────────────────────────────────────────────────
 [project] 
 name = "talkingtomachines" 
-version = "0.2.0" 
+version = "0.2.1" 
 description = "A python package for conducting AI-AI experiments for social science research." 
-readme = "README.md" 
+readme = {file = "README.md", content-type = "text/markdown"} 
 requires-python = ">=3.10" 
-license = {text = "MIT"}
+license = {file = "LICENSE"}
 authors = [
   { name = "Raymond Low", email = "raymond.low@nuffield.ox.ac.uk" },
   { name = "Raymond Duch", email = "raymond.duch@nuffield.ox.ac.uk" },
