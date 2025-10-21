@@ -26,7 +26,7 @@ The **talkingtomachines** platform is developed to facilitate the design, conduc
   * On Windows, allow the installer to add Conda to your PATH.
   * On macOS, you may need to restart your terminal after installation.
 
-Verify your installation by running the following command in your terminal (for macOS) or Windows Powershell (for Winfows):
+Verify your installation by running the following command in your terminal (for macOS) or Windows Powershell (for Windows):
 
 ```bash
 conda --version  # Displays conda's version number
@@ -69,7 +69,7 @@ pip install \
 
 ### 4. Provide API keys for OpenAI and Hugging Face
 
-Export the API keys for OpenAI and Hugging Face as environment variables on your terminal (for macOS) or Windows Powershell (for Winfows):
+Export the API keys for OpenAI and Hugging Face as environment variables on your terminal (for macOS) or Windows Powershell (for Windows):
 ```bash
 export OPENAI_API_KEY=sk-...
 export HF_API_KEY=hf_...
