@@ -1807,6 +1807,9 @@ class AItoAIInterviewExperiment(AItoAIConversationalExperiment):
                     }
                     subject_message_history[role].append(message_dict)
                     session_message_history.append(message_dict)
+                    if "Summarizer" in subject_message_history and role != "Summarizer":
+                        subject_message_history["Summarizer"].append(message_dict)
+
                     if test_mode:
                         print(message_dict)
                         print()

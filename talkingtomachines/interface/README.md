@@ -85,11 +85,11 @@
 
 ## 5.  `demographic_profiles`
 
-* **Row 1:** Shorten name for the survey question. *Must be non‑blank & unique.*
-* **Row 2:** The actual wording used in the survey question. *Must be non‑blank and human-readable.*
-* **Row 3 … n:** The subjects' demographic data, where each row represent the profile of a unique subject and each column refers to the response provided by the subject for a particular survey question.
+* **Row 1:** Shorten name for the demographic question. *Must be non‑blank & unique.*
+* **Row 2:** The actual wording used in the demographic question. *Must be non‑blank and human-readable.*
+* **Row 3 … n:** The subjects' demographic data, where each row represent the profile of a unique subject and each column refers to the response provided by the subject for a particular question.
 * There must be a column named 'ID' representing a unique identifier for each subject's profile.
-* Each subject's survey responses are merged into a single Q&A text snippet—`Interviewer: {question}` followed by `Me: {response}`—that records their demographic profile. This snippet is then inserted into the LLM-powered subject's system message to provide the LLM context about the subject's demographics. If `include_backstories` is set to `True`, the subject's backstory will be generated based on the subject's survey responses recorded in this worksheet.
+* Each subject's responses are merged into a single Q&A text snippet—`Interviewer: {question}` followed by `Me: {response}`—that records their demographic profile. This snippet is then inserted into the LLM-powered subject's system message to provide the LLM context about the subject's demographics. If `include_backstories` is set to `True`, the subject's backstory will be generated based on the subject's responses recorded in this worksheet.
 
 
 ---

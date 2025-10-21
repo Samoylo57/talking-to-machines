@@ -61,18 +61,20 @@ pip --version
 
 ### 3. Install the talkingtomachines package
 ```bash
-pip install \
- --index-url https://test.pypi.org/simple/ \
- --extra-index-url https://pypi.org/simple \
- talkingtomachines
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple talkingtomachines
 ```
 
 ### 4. Provide API keys for OpenAI and Hugging Face
 
-Export the API keys for OpenAI and Hugging Face as environment variables on your terminal (for macOS) or Windows Powershell (for Windows):
+Set the API keys for OpenAI and Hugging Face as environment variables on your terminal (for macOS) or Windows Powershell (for Windows):
 ```bash
+# For macOS: 
 export OPENAI_API_KEY=sk-...
 export HF_API_KEY=hf_...
+
+# For Windows: 
+$env:OPENAI_API_KEY='sk-...'
+$env:HF_API_KEY='hf-...'
 ````
 
 ---
@@ -125,7 +127,12 @@ Note: A simple, end‑to‑end Python example on how to construct and conduct an
 
 Detailed instructions on how to populate the prompt template can be found here: [`Prompt Template Instructions`](https://github.com/talking-to-machines/talking-to-machines/tree/main/talkingtomachines/interface/README.md)
 
-You may also check out [`Demo Example`](https://github.com/talking-to-machines/talking-to-machines/tree/main/demos/public_good_experiment) to see an example of a prompt template that was prepared by the development team to replicate a public goods experiment using the **talkingtomachines** platform, or a clean version of the prompt template for creating new experiments [`New Prompt Template`](https://github.com/talking-to-machines/talking-to-machines/tree/main/demos/prompt_template.xlsx).
+You may also check out the following examples of different experiments and their prompt templates prepared by the development team:
+* **Public Goods Experiment**: A public goods experiment demo example with a populated prompt template workbook and description of its experimental design: [Public Goods Experiment Demo](https://github.com/talking-to-machines/talking-to-machines/tree/main/demos/public_good_experiment)
+
+* **Randomized Controlled Trial (RCT)**: A RCT experiment demo example with a populated prompt template workbook: [RCT Demo](https://github.com/talking-to-machines/talking-to-machines/tree/main/demos/rct_experiment)
+
+* **Prompt Template**: Alternatively, a blank version of the prompt template has been provided to serve as a starting point for creating new synthetic experiments: [Prompt Template](https://github.com/talking-to-machines/talking-to-machines/tree/main/demos/prompt_template.xlsx)
 
 ---
 

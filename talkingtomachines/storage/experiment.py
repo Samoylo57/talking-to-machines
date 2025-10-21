@@ -92,7 +92,7 @@ def save_experiment_as_csv(file_name: str) -> None:
     Args:
         file_name (str): The path to the JSON file containing the experiment data.
     """
-    with open(file_name, "r") as file:
+    with open(file_name, "r", encoding="utf-8", errors="ignore") as file:
         json_output = json.load(file)
 
     result_dict = {}
