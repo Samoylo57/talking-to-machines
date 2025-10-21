@@ -115,4 +115,4 @@
 ---
 
 ## Video Walkthrough
-A video walkthrough on how to populate the prompt template workbook based on a simple public goods experiment can be found here: [Video Walkthrough](https://www.loom.com/share/90f729ee68ac44d887192ec662f17a39?sid=6280fd9b-bd7c-4ef4-ba77-8781e65c735a)
+A video walkthrough on how to populate the prompt template workbook based on a simple public goods experiment can be found here: [Video Walkthrough](https://www.loom.com/share/ba5c913979344fd384fd769c64c01cf4?sid=7e2a8981-4826-4230-858d-e1fd63894157)
