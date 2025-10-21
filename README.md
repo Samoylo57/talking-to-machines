@@ -67,16 +67,9 @@ pip install \
  talkingtomachines
 ```
 
-### 4. Provide API keys for OpenAI and HuggingFace
+### 4. Provide API keys for OpenAI and Hugging Face
 
-Approach 1: Create a `.env` file in your project directory
-```ini
-# .env file
-OPENAI_API_KEY=sk-...
-HF_API_KEY=hf_...
-``` 
-
-Approach 2: Export as environment variables on your terminal
+Export the API keys for OpenAI and Hugging Face as environment variables on your terminal (for macOS) or Windows Powershell (for Winfows):
 ```bash
 export OPENAI_API_KEY=sk-...
 export HF_API_KEY=hf_...
@@ -85,7 +78,7 @@ export HF_API_KEY=hf_...
 ---
 
 ## Video Walkthrough
-A video walkthrough of how to set up the Talking To Machines platform for both macOS and Windows devices can be found here:
+A video walkthrough on how to set up the Talking To Machines platform for both macOS and Windows devices can be found here:
 
 macOS: [Video Walkthrough](https://www.loom.com/share/a2c15f1258d5436eaeca197998286cd9?sid=7958bdbe-2f34-4d5f-8d47-49fd49cb315c)
 
