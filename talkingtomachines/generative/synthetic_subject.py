@@ -101,7 +101,10 @@ class SyntheticSubject:
             ValueError: If the provided model_info is not supported.
         """
         if self.model_info in OPENAI_MODELS:
-            return openai.OpenAI(api_key=DevelopmentConfig.OPENAI_API_KEY)
+            client_kwargs = {"api_key": DevelopmentConfig.OPENAI_API_KEY}
+            if DevelopmentConfig.OPENAI_BASE_URL:
+                client_kwargs["base_url"] = DevelopmentConfig.OPENAI_BASE_URL
+            return openai.OpenAI(**client_kwargs)
 
         elif self.model_info in ["hf-inference"]:
             return openai.OpenAI(
@@ -113,7 +116,10 @@ class SyntheticSubject:
             warnings.warn(
                 f"{self.model_info} is not 'hf-inference' and not one of the openai.OpenAI instruct models ({OPENAI_MODELS}). Defaulting to loading import openai.OpenAI configurations."
             )
-            return openai.OpenAI(api_key=DevelopmentConfig.OPENAI_API_KEY)
+            client_kwargs = {"api_key": DevelopmentConfig.OPENAI_API_KEY}
+            if DevelopmentConfig.OPENAI_BASE_URL:
+                client_kwargs["base_url"] = DevelopmentConfig.OPENAI_BASE_URL
+            return openai.OpenAI(**client_kwargs)
 
     def to_dict(self) -> dict[str, Any]:
         """Converts the SyntheticSubject object to a dictionary.
