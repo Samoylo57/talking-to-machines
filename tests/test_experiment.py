@@ -63,9 +63,12 @@ def test_ai_conversational_experiment_check_model_info():
         treatment_assignment_strategy="simple_random",
     )
     assert experiment.check_model_info("gpt-4o") == "gpt-4o"
-    assert experiment.check_model_info("gpt-3.5-turbo") == "gpt-3.5-turbo"
+    assert (
+        experiment.check_model_info("cognitivecomputations/dolphin3.0-mistral-24b:free")
+        == "cognitivecomputations/dolphin3.0-mistral-24b:free"
+    )
     with pytest.raises(ValueError):
-        experiment.check_model_info("invalid_model")
+        experiment.check_model_info("")
 
 
 def test_ai_conversational_experiment_check_treatment_assignment_strategy():

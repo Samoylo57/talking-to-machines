@@ -1,4 +1,4 @@
-import re, warnings, openai, json
+import re, openai, json
 from typing import Any, Callable
 from talkingtomachines.generative.prompt import (
     generate_subject_system_message,
@@ -9,27 +9,6 @@ from talkingtomachines.config import DevelopmentConfig
 
 ProfileInfo = dict[str, Any]
 NUM_RETRY = 3
-OPENAI_MODELS = [
-    "gpt-5",
-    "gpt-5-mini",
-    "gpt-5-nano",
-    "gpt-5-chat-latest",
-    "gpt-5-codex",
-    "gpt-5-pro",
-    "gpt-4.1",
-    "gpt-4.1-mini",
-    "gpt-4.1-nano",
-    "gpt-4o",
-    "gpt-4o-2024-05-13",
-    "gpt-4o-mini",
-    "o1",
-    "o1-pro",
-    "o3-pro",
-    "o3",
-    "o4-mini",
-]
-
-
 class SyntheticSubject:
     """A class for constructing the base synthetic subject.
 
@@ -100,26 +79,16 @@ class SyntheticSubject:
         Raises:
             ValueError: If the provided model_info is not supported.
         """
-        if self.model_info in OPENAI_MODELS:
-            client_kwargs = {"api_key": DevelopmentConfig.OPENAI_API_KEY}
-            if DevelopmentConfig.OPENAI_BASE_URL:
-                client_kwargs["base_url"] = DevelopmentConfig.OPENAI_BASE_URL
-            return openai.OpenAI(**client_kwargs)
-
-        elif self.model_info in ["hf-inference"]:
+        if self.model_info == "hf-inference":
             return openai.OpenAI(
                 base_url=self.hf_inference_endpoint,
                 api_key=DevelopmentConfig.HF_API_KEY,
             )
 
-        else:
-            warnings.warn(
-                f"{self.model_info} is not 'hf-inference' and not one of the openai.OpenAI instruct models ({OPENAI_MODELS}). Defaulting to loading import openai.OpenAI configurations."
-            )
-            client_kwargs = {"api_key": DevelopmentConfig.OPENAI_API_KEY}
-            if DevelopmentConfig.OPENAI_BASE_URL:
-                client_kwargs["base_url"] = DevelopmentConfig.OPENAI_BASE_URL
-            return openai.OpenAI(**client_kwargs)
+        client_kwargs = {"api_key": DevelopmentConfig.OPENAI_API_KEY}
+        if DevelopmentConfig.OPENAI_BASE_URL:
+            client_kwargs["base_url"] = DevelopmentConfig.OPENAI_BASE_URL
+        return openai.OpenAI(**client_kwargs)
 
     def to_dict(self) -> dict[str, Any]:
         """Converts the SyntheticSubject object to a dictionary.

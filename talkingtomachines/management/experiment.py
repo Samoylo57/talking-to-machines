@@ -17,26 +17,6 @@ from talkingtomachines.generative.prompt import (
 )
 from talkingtomachines.storage.experiment import save_experiment
 
-SUPPORTED_MODELS = [
-    "gpt-5",
-    "gpt-5-mini",
-    "gpt-5-nano",
-    "gpt-5-chat-latest",
-    "gpt-5-codex",
-    "gpt-5-pro",
-    "gpt-4.1",
-    "gpt-4.1-mini",
-    "gpt-4.1-nano",
-    "gpt-4o",
-    "gpt-4o-2024-05-13",
-    "gpt-4o-mini",
-    "o1",
-    "o1-pro",
-    "o3-pro",
-    "o3",
-    "o4-mini",
-    "hf-inference",
-]
 SUPPORTED_TREATMENT_ASSIGNMENT_STRATEGIES = [
     "simple_random",
     "complete_random",
@@ -202,15 +182,22 @@ class AIConversationalExperiment(Experiment):
             str: The validated model_info.
 
         Raises:
-            ValueError: If the provided model_info is not supported based on SUPPORTED_MODELS.
+            ValueError: If the provided model_info is empty.
         """
-        if model_info not in SUPPORTED_MODELS:
-            warnings.warn(
-                f"{model_info} is not one of the supported models ({SUPPORTED_MODELS}). Defaulting to querying OpenAI model {SUPPORTED_MODELS[0]}."
-            )
-            return SUPPORTED_MODELS[0]
+        if not isinstance(model_info, str) or not model_info.strip():
+            raise ValueError("The model_info field must be a non-empty string.")
 
-        return model_info
+        return model_info.strip()
+
+    def check_model_info(self, model_info: str) -> str:
+        """Public wrapper for validating model identifiers.
+
+        This helper mirrors the internal `_check_model_info` validation so that
+        callers (and tests) can confirm whether an arbitrary model identifier is
+        acceptable without mutating state.
+        """
+
+        return self._check_model_info(model_info)
 
     def _check_temperature(self, temperature: float) -> float:
         """Validates and adjusts the provided temperature value.

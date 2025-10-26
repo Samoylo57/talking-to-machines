@@ -1,29 +1,10 @@
-import time, warnings, openai, re
+import time, openai, re
 from typing import List, Any, Optional
 from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 
 
 RETRY_DELAY = 300
 MAX_RETRIES = 5
-OPENAI_MODELS = [
-    "gpt-5",
-    "gpt-5-mini",
-    "gpt-5-nano",
-    "gpt-5-chat-latest",
-    "gpt-5-codex",
-    "gpt-5-pro",
-    "gpt-4.1",
-    "gpt-4.1-mini",
-    "gpt-4.1-nano",
-    "gpt-4o",
-    "gpt-4o-2024-05-13",
-    "gpt-4o-mini",
-    "o1",
-    "o1-pro",
-    "o3-pro",
-    "o3",
-    "o4-mini",
-]
 NO_TEMPERATURE_MODELS = [
     "gpt-5",
     "gpt-5-mini",
@@ -55,29 +36,18 @@ def query_llm(
     Returns:
         str: Response from the LLM.
     """
-    if model_info in OPENAI_MODELS:
-        return query_open_ai(
-            llm_client=llm_client,
-            model_info=model_info,
-            message_history=message_history,
-            temperature=temperature,
-        )
-    elif model_info in ["hf-inference"]:
+    if model_info == "hf-inference":
         return query_hugging_face(
             llm_client=llm_client,
             message_history=message_history,
             temperature=temperature,
         )
-    else:
-        warnings.warn(
-            f"{model_info} is not 'hf-inference' and not one of the OpenAI instruct models ({OPENAI_MODELS}). Defaulting to query OpenAI endpoint."
-        )
-        return query_open_ai(
-            llm_client=llm_client,
-            model_info=model_info,
-            message_history=message_history,
-            temperature=temperature,
-        )
+    return query_open_ai(
+        llm_client=llm_client,
+        model_info=model_info,
+        message_history=message_history,
+        temperature=temperature,
+    )
 
 
 def _normalize_dropbox_url(url: str) -> str:
